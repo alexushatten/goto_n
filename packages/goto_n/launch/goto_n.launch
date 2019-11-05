@@ -1,0 +1,5 @@
+<launch>
+
+  <node pkg="goto_n" type="goto_n.py" name="goto_n" output="screen"/>
+
+</launch>
