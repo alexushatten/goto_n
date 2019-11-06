@@ -62,25 +62,25 @@ class GoToNNode(DTROS):
                 
                 if tile_matrix[i,j] == "asphalt":
                     node_matrix[i,j]= 0
-                elif tile_matrix[i,j] == "straight/N" or tile_matrix[i,j] =="straight/S":
+                elif tile_matrix[i,j] == "straight/N" or tile_matrix[i,j] =="straight/S": 
                     node_matrix[i,j]= 1
-                elif tile_matrix[i,j] == "straight/W" or tile_matrix[i,j] =="straight/W":
+                elif tile_matrix[i,j] == "straight/W" or tile_matrix[i,j] =="straight/W": 
                     node_matrix[i,j]= 2
-                elif tile_matrix[i,j] == "curve_left/N" or tile_matrix[i,j] =="curve_right/S":
+                elif tile_matrix[i,j] == "curve_left/N" or tile_matrix[i,j] =="curve_right/E":  
                     node_matrix[i,j]= 3
-                elif tile_matrix[i,j] == "curve_left/S" or tile_matrix[i,j] =="curve_right/N":
+                elif tile_matrix[i,j] == "curve_left/S" or tile_matrix[i,j] =="curve_right/W": 
                     node_matrix[i,j]= 4
-                elif tile_matrix[i,j] == "curve_left/W" or tile_matrix[i,j] =="curve_right/E":
+                elif tile_matrix[i,j] == "curve_left/W" or tile_matrix[i,j] =="curve_right/N": 
                     node_matrix[i,j]= 5
-                elif tile_matrix[i,j] == "curve_left/E" or tile_matrix[i,j] =="curve_right/W":
+                elif tile_matrix[i,j] == "curve_left/E" or tile_matrix[i,j] =="curve_right/S": 
                     node_matrix[i,j]= 6
-                elif tile_matrix[i,j] == "3way_left/N" or tile_matrix[i,j] =="3way_right/S":
+                elif tile_matrix[i,j] == "3way_left/N" or tile_matrix[i,j] =="3way_right/S": 
                     node_matrix[i,j]= 7
-                elif tile_matrix[i,j] == "3way_left/S" or tile_matrix[i,j] =="3way_right/N":
+                elif tile_matrix[i,j] == "3way_left/S" or tile_matrix[i,j] =="3way_right/N": 
                     node_matrix[i,j]= 8
-                elif tile_matrix[i,j] == "3way_left/W" or tile_matrix[i,j] =="3way_right/E":
+                elif tile_matrix[i,j] == "3way_left/W" or tile_matrix[i,j] =="3way_right/E": 
                     node_matrix[i,j]= 9
-                elif tile_matrix[i,j] == "3way_left/E" or tile_matrix[i,j] =="3way_right/W":
+                elif tile_matrix[i,j] == "3way_left/E" or tile_matrix[i,j] =="3way_right/W": 
                     node_matrix[i,j]= 10
                 else:
                     node_matrix[i,j] = 11
