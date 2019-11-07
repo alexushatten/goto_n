@@ -42,9 +42,20 @@ class GoToNNode(DTROS):
         self.go_south= self.go_matrix("south")
         self.go_west= self.go_matrix("west")
 
+        # Create direction possibilities
+        self.directions = [self.go_north,self.go_east,self.go_west,self.go_south]
+        self.direction_names = ["north","east","west","south"]
+        self.direction_names_reversed = ["south","west","east","north"]
+        ###################3TEST
+        oreintation = "south"
+        row = 3
+        column = 2
+        dirs = self.find_possible_directions(oreintation,row, column)
+        print(dirs)
+        ####################
+
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
-        print(self.go_east)
         print("initialized")
 
     def extract_tile_matrix(self):
@@ -179,7 +190,7 @@ class GoToNNode(DTROS):
             print("have a nice day")
     
     def go_matrix(self,direction):
-        matrix_size = self.matrix_shape[0]*self.matrix_shape[1] - 1
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
         movement_matrix = np.zeros((matrix_size,matrix_size))
         nodes = np.array(self.node_matrix).flatten()
         transition_point = 0
@@ -204,9 +215,35 @@ class GoToNNode(DTROS):
         for i in range(0,matrix_size):
             for y in valid_nodes: 
                 if nodes[i] == y:
-                    if i + transition_point < matrix_size and i + transition_point > 0:
-                        movement_matrix[i,i + transition_point] = 1
+                    movement_matrix[i,i + transition_point] = 1
         return movement_matrix
+
+    def find_possible_directions(self,in_orientation,row, column):
+        cell = row*self.matrix_shape[1] + column
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        possible_movements = []
+        possible_direction = self.directions
+        name_of_possible_direction = self.direction_names
+        total_possible_directions = 4
+        i = 0
+
+        for dir in self.direction_names_reversed:
+            if dir == in_orientation:
+                del possible_direction[i]
+                del name_of_possible_direction[i]
+                total_possible_directions -=1
+            i += 1
+
+        for i in range(total_possible_directions):
+            for j in range (0,matrix_size):
+                if possible_direction[i][cell][j] > 0:
+                    #FIND A WAY TO CONVERT THIS>
+                    
+                    #new_row = j - 
+                    #new_column = j % self.matrix_shape[0]
+                    #one_possible_dir = [name_of_possible_direction[i],new_row,new_column]
+
+        return one_possible_dir
     
     def callback(self, markerarray):
         marker = markerarray.markers
@@ -224,8 +261,7 @@ class GoToNNode(DTROS):
                 #Correct orientation, if robot is not facing any of the directions possible
                 ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
 
-
-
+            
 
 
 if __name__ == '__main__':
