@@ -13,6 +13,9 @@ from duckietown_msgs.msg import WheelsCmdStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from duckietown_utils import load_map
 
+#To print whole array
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 
 
 class GoToNNode(DTROS):
@@ -29,12 +32,19 @@ class GoToNNode(DTROS):
         self.map_data = load_map(self.map_filename)
 
         self.map_matrix, self.matrix_shape, self.tile_size = self.extract_tile_matrix()
+        print (self.matrix_shape)
         self.node_matrix = self.encode_map_structure(self.map_matrix)
         print (self.node_matrix)
+        
+        # Create movement_matrixes
+        self.go_north= self.go_matrix("north")
+        self.go_east= self.go_matrix("east")
+        self.go_south= self.go_matrix("south")
+        self.go_west= self.go_matrix("west")
 
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
-
+        print(self.go_east)
         print("initialized")
 
     def extract_tile_matrix(self):
@@ -47,7 +57,6 @@ class GoToNNode(DTROS):
         autolab_matrix_shape = tile_matrix.shape
 
         tile_size = self.map_data["tile_size"]
-        print (tile_size)
         return tile_matrix, autolab_matrix_shape, tile_size
 
     def encode_map_structure(self, tile_matrix):
@@ -55,10 +64,9 @@ class GoToNNode(DTROS):
         column = tile_matrix.shape[1]
         #print(tile_matrix)
 
-        node_matrix = tile_matrix
+        node_matrix = np.zeros((self.matrix_shape[0],self.matrix_shape[1]))
         for i in range(0, row):
             for j in range(0, column):
-                node_matrix[i,j] = tile_matrix[i,j]
                 
                 if tile_matrix[i,j] == "asphalt":
                     node_matrix[i,j]= 0
@@ -104,7 +112,7 @@ class GoToNNode(DTROS):
         sqx = q.x * q.x
         sqy = q.y * q.y
         sqz = q.z * q.z
-        
+
         normal = math.sqrt(sqw + sqx + sqy + sqz)
         pole_result = (q.x * q.z) + (q.y * q.w)
 
@@ -137,11 +145,11 @@ class GoToNNode(DTROS):
 
     def determine_position_tile(self, pose_row, pose_column):
         current_tile_type = self.node_matrix[pose_row, pose_column]
-        return int(current_tile_type)
+        return current_tile_type
 
     
-    def orientation_correction(self, initial_orientation, current_tile_type):
-        orientation = initial_orientation
+    def orientation_correction(self, orientation, current_tile_type):
+
         if current_tile_type == 0:
             print('You are on Asphalt, call rescue team')
         
@@ -170,19 +178,55 @@ class GoToNNode(DTROS):
         else:
             print("have a nice day")
     
+    def go_matrix(self,direction):
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1] - 1
+        movement_matrix = np.zeros((matrix_size,matrix_size))
+        nodes = np.array(self.node_matrix).flatten()
+        transition_point = 0
+
+        #Direction of movement init
+        if direction == "north":
+            valid_nodes = [1,4,6,7,8,10,11]
+            transition_point = -self.matrix_shape[1]
+        elif direction == "east":
+            valid_nodes = [2,4,5,8,9,10,11]
+            transition_point = 1
+        elif direction == "south":
+            valid_nodes = [1,3,5,7,8,9,11]
+            transition_point = self.matrix_shape[1]
+        elif direction == "west":
+            valid_nodes = [2,3,6,7,9,10,11]
+            transition_point = -1
+        else:
+            print("unknown direction choise")
+
+        #Create movemet matrix
+        for i in range(0,matrix_size):
+            for y in valid_nodes: 
+                if nodes[i] == y:
+                    if i + transition_point < matrix_size and i + transition_point > 0:
+                        movement_matrix[i,i + transition_point] = 1
+        return movement_matrix
+    
     def callback(self, markerarray):
         marker = markerarray.markers
         for bots in marker: 
             if bots.ns == "duckiebots":
+                #Set duckiebots position and orientation
                 duckiebot_x = bots.pose.position.x
                 duckiebot_y = bots.pose.position.y
-                
                 duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
-                duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
                 
+                #Find duckiebots tile column and row
+                duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
+                #Find what type of tile robot is on
                 current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
-                print(current_tile_type)
-                self.orientation_correction(duckiebot_orientation,current_tile_type)
+                #Correct orientation, if robot is not facing any of the directions possible
+                ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
+
+
+
+
 
 if __name__ == '__main__':
     # Initialize the node
