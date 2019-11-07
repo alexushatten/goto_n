@@ -99,12 +99,12 @@ class GoToNNode(DTROS):
             tile_row = 0
         return tile_row, tile_column
     
-    def quat_to_euler(self, q):
+    def quat_to_compass(self, q):
         sqw = q.w * q.w
         sqx = q.x * q.x
         sqy = q.y * q.y
         sqz = q.z * q.z
-
+        
         normal = math.sqrt(sqw + sqx + sqy + sqz)
         pole_result = (q.x * q.z) + (q.y * q.w)
 
@@ -123,11 +123,16 @@ class GoToNNode(DTROS):
         r12 = sqw + sqx - sqy - sqz
         
         #Eulervalue
-        rz = abs(math.atan2( r11, r12 ))
+        rz = math.atan2( r11, r12 )
+        
+        #Convert to compasscoordinates 90 being east
+        if rz > 0:
+            rz = rz - 2*pi
 
-        #Convert to deg
+        rz = abs(rz)
         rz = rz + pi/2
         deg = (rz/pi)*180
+        deg = deg % 360
         return deg
 
     def determine_position_tile(self, pose_row, pose_column):
@@ -172,7 +177,7 @@ class GoToNNode(DTROS):
                 duckiebot_x = bots.pose.position.x
                 duckiebot_y = bots.pose.position.y
                 
-                duckiebot_orientation= self.quat_to_euler(bots.pose.orientation)
+                duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
                 duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
                 
                 current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
