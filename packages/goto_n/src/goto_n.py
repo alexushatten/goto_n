@@ -48,13 +48,18 @@ class GoToNNode(DTROS):
         self.direction_names_reversed = ["south","west","east","north"]
 
         ##TEST
+        init_row = 1
+        init_column = 2
+        init_deg = 3
         termination_row = 4
         termination_column = 5
-
         ####################
+
         self.cost_mat = self.cost_matrix(termination_row, termination_column)
         self.Optimal_movements , self.Number_Of_Movements = self.value_iteration()
 
+        self.movememt_commands = self.find_robot_commands(init_deg,init_row,init_column)
+        print (self.movememt_commands)
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
         
@@ -651,7 +656,56 @@ class GoToNNode(DTROS):
 
         print(Optimal_movements)
         print(Number_Of_Movements)
-        return Optimal_movements , Number_Of_Movements
+        return Optimal_movements , Number_Of_Movements.astype(int)
+
+    def find_robot_commands(self, orientation, row, column):
+        cell = row*self.matrix_shape[1] + column
+        movement_commands = []
+        current_orientation = orientation
+        previous_orientation = orientation
+        for i in range (0, self.Number_Of_Movements[cell]):
+            print(i)
+            compass_movement = self.Optimal_movements[cell]
+            if compass_movement == 0:
+                transition_point = -self.matrix_shape[1]
+            elif compass_movement == 1:
+                transition_point = 1
+            elif compass_movement == 3:
+                transition_point = self.matrix_shape[1]
+            elif compass_movement == 2:
+                transition_point = -1
+            
+            if self.node_matrix[row][column] > 6:
+                print(i)
+                current_tile = self.node_matrix[row][column]
+                if previous_orientation ==  self.Optimal_movements[cell]:
+                    movement_commands.append("straight")
+                elif previous_orientation == 0 or previous_orientation == 3:
+                    if abs(self.Optimal_movements[cell]- previous_orientation) == 1:
+                        movement_commands.append("right")
+                    if abs(self.Optimal_movements[cell] - previous_orientation) == 2:
+                        movement_commands.append("left")
+                
+                elif previous_orientation == 1 or previous_orientation == 2:
+                    print(self.Optimal_movements[cell] - previous_orientation)
+                    if abs(self.Optimal_movements[cell]- previous_orientation) == 2:
+                        movement_commands.append("right")
+                    if abs(self.Optimal_movements[cell] - previous_orientation) == 1:
+                        movement_commands.append("left")
+
+            else:
+                movement_commands.append("straight")
+
+            previous_orientation = self.Optimal_movements[cell]
+            cell = cell + transition_point
+            row = int(math.floor(cell/self.matrix_shape[1]))
+            column = int(cell - row*self.matrix_shape[1])
+        movement_commands.append("stop")
+        return movement_commands
+
+            
+            
+
 
     def find_possible_directions(self,in_orientation,row, column):
         cell = row*self.matrix_shape[1] + column
