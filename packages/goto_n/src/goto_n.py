@@ -32,9 +32,7 @@ class GoToNNode(DTROS):
         self.map_data = load_map(self.map_filename)
 
         self.map_matrix, self.matrix_shape, self.tile_size = self.extract_tile_matrix()
-        print (self.matrix_shape)
         self.node_matrix = self.encode_map_structure(self.map_matrix)
-        print (self.node_matrix)
         
         # Create movement_matrixes
         self.go_north= self.go_matrix("north")
@@ -50,19 +48,20 @@ class GoToNNode(DTROS):
         ##TEST
         init_row = 1
         init_column = 2
-        init_deg = 3
-        termination_row = 4
-        termination_column = 5
-        ####################
+        init_compass_dir = 0
+        self.termination_row = 3
+        self.termination_column = 2
+        self.termination_direction = 2
 
-        self.cost_mat = self.cost_matrix(termination_row, termination_column)
+        self.cost_mat = self.cost_matrix(self.termination_row, self.termination_column, self.termination_direction, init_row, init_column, init_compass_dir)
         self.Optimal_movements , self.Number_Of_Movements = self.value_iteration()
 
-        self.movememt_commands = self.find_robot_commands(init_deg,init_row,init_column)
+        self.movememt_commands = self.find_robot_commands(init_compass_dir,init_row,init_column)
         print (self.movememt_commands)
+        ####################
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
-        
+
         #Publisher to publish orientation correction commands
         self.orientation_publisher = rospy.Publisher('/autobot/orientation_correction', Int16, queue_size=10)
         
@@ -74,7 +73,6 @@ class GoToNNode(DTROS):
             tile_matrix.append(tile)
         
         tile_matrix = np.array(tile_matrix)
-        print(tile_matrix)
         autolab_matrix_shape = tile_matrix.shape
 
         tile_size = self.map_data["tile_size"]
@@ -612,7 +610,7 @@ class GoToNNode(DTROS):
                     movement_matrix[i,i + transition_point] = 1
         return movement_matrix
 
-    def cost_matrix(self, termination_row, termination_column):
+    def cost_matrix(self, termination_row, termination_column, termination_direction, init_row, init_column, init_direction):
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
         cost_mat=np.matmul(self.go_north,np.ones((matrix_size,1)))
         cost_mat=np.append(cost_mat,np.matmul(self.go_east,np.ones((matrix_size,1))),1)
@@ -620,8 +618,38 @@ class GoToNNode(DTROS):
         cost_mat=np.append(cost_mat,np.matmul(self.go_south,np.ones((matrix_size,1))),1)
         cost_mat=np.append(cost_mat,np.matmul(self.go_nowhere,1000*np.ones((matrix_size,1))),1)
         cost_mat[cost_mat < 0.1]=float('inf')
+
+        #Add 0 cost to desired location
         cell = termination_row*self.matrix_shape[1] + termination_column
         cost_mat[cell,4]=0
+        
+
+        #Add inf cost to direction oposite of enddirection in the cell next to it
+        if termination_direction == 0:
+            neighbourcell = cell - self.matrix_shape[1] 
+            cost_mat[neighbourcell,3] = float('inf')
+        if termination_direction == 1:
+            neighbourcell = cell + 1
+            cost_mat[neighbourcell,2] = float('inf')
+        if termination_direction == 2:
+            neighbourcell = cell - 1
+            cost_mat[neighbourcell,1] = float('inf')
+        if termination_direction == 3:
+            neighbourcell = cell - self.matrix_shape[1] 
+            cost_mat[neighbourcell,0] = float('inf')
+
+        #Add inf cost to direction oposite of startdirection in startcell
+        start_cell = init_row*self.matrix_shape[1] + init_column
+
+        if init_direction == 0:
+            cost_mat[start_cell,3] = float('inf')
+        if init_direction == 1:
+            cost_mat[start_cell,2] = float('inf')
+        if init_direction == 2:
+            cost_mat[start_cell,1] = float('inf')
+        if init_direction == 3:
+            cost_mat[start_cell,0] = float('inf')
+
         return cost_mat
 
     def value_iteration(self):
@@ -646,7 +674,6 @@ class GoToNNode(DTROS):
                 V_new_matrix[i]=np.amin(V_amound_of_inputs)
                 I_matrix[i]=np.argmin(V_amound_of_inputs)
             V_matrix=V_new_matrix
-            print(iteration_value)
             if iteration_value==200:
                 print("reached maximum iterations")
                 break
@@ -655,7 +682,6 @@ class GoToNNode(DTROS):
         Number_Of_Movements[Number_Of_Movements > 1000]=float('inf')
 
         print(Optimal_movements)
-        print(Number_Of_Movements)
         return Optimal_movements , Number_Of_Movements.astype(int)
 
     def find_robot_commands(self, orientation, row, column):
@@ -664,7 +690,6 @@ class GoToNNode(DTROS):
         current_orientation = orientation
         previous_orientation = orientation
         for i in range (0, self.Number_Of_Movements[cell]):
-            print(i)
             compass_movement = self.Optimal_movements[cell]
             if compass_movement == 0:
                 transition_point = -self.matrix_shape[1]
@@ -676,7 +701,6 @@ class GoToNNode(DTROS):
                 transition_point = -1
             
             if self.node_matrix[row][column] > 6:
-                print(i)
                 current_tile = self.node_matrix[row][column]
                 if previous_orientation ==  self.Optimal_movements[cell]:
                     movement_commands.append("dont_turn")
@@ -701,10 +725,7 @@ class GoToNNode(DTROS):
             row = int(math.floor(cell/self.matrix_shape[1]))
             column = int(cell - row*self.matrix_shape[1])
         movement_commands.append("stop")
-        return movement_commands
-
-            
-            
+        return movement_commands    
 
 
     def find_possible_directions(self,in_orientation,row, column):
@@ -734,22 +755,55 @@ class GoToNNode(DTROS):
                     possible_movements.append(one_possible_move)
 
         return possible_movements
-    
+
+    def find_compass_notation(self, deg):
+        compass = 0
+        #North
+        if deg > 315 or deg <= 45:
+            compass = 0
+        #East
+        if deg > 45 and deg <= 135:
+            compass = 1
+        #South
+        if deg > 135 and deg <= 225:
+            compass = 3
+        #West
+        if deg > 225 and deg <= 315:
+            compass = 2
+        
+        return compass
+
     def callback(self, markerarray):
         marker = markerarray.markers
         for bots in marker: 
             if bots.ns == "duckiebots":
                 #Set duckiebots position and orientation
+                duckiebot_name = bots.ns
                 duckiebot_x = bots.pose.position.x
                 duckiebot_y = bots.pose.position.y
                 duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
+
+                duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
                 
                 #Find duckiebots tile column and row
                 duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
                 #Find what type of tile robot is on
                 current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
+
                 #Correct orientation, if robot is not facing any of the directions possible
                 ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
+                
+                #Find costfunction
+                duckie_cost_mat = self.cost_matrix(self.termination_row, self.termination_column, self.termination_direction, duckiebot_row, duckiebot_column, duckie_compass_notation)
+                duckie_Optimal_movements , self.Number_Of_Movements = self.value_iteration()
+                
+                #Find the commands to send to duckiebot
+                duckie_movememt_commands = self.find_robot_commands(compass_direction,duckiebot_row,duckiebot_column)
+
+                #Create a publisher for each duckiebot
+                command_publisher = rospy.Publisher('/{}/movement_commands'.format(duckiebot_name), StringArray, queue_size=10)
+
+                print (self.movememt_commands)
 
             
 
