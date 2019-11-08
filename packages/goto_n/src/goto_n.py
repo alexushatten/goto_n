@@ -7,6 +7,7 @@ import rospy
 import yaml
 import math
 
+from std_msgs.msg import Int16
 from duckietown import DTROS
 from sensor_msgs.msg import CompressedImage
 from duckietown_msgs.msg import WheelsCmdStamped
@@ -24,7 +25,6 @@ class GoToNNode(DTROS):
 
         # Initialize the DTROS parent class
         super(GoToNNode, self).__init__(node_name=node_name)
-        self.veh_name = rospy.get_namespace().strip("/")
 
         # Set up map
         self.map_name = 'ethz_amod_lab_k31'
@@ -41,21 +41,26 @@ class GoToNNode(DTROS):
         self.go_east= self.go_matrix("east")
         self.go_south= self.go_matrix("south")
         self.go_west= self.go_matrix("west")
-
+        self.go_nowhere = np.eye(self.matrix_shape[0]*self.matrix_shape[1])
         # Create direction possibilities
         self.directions = [self.go_north,self.go_east,self.go_west,self.go_south]
         self.direction_names = ["north","east","west","south"]
         self.direction_names_reversed = ["south","west","east","north"]
-        ###################3TEST
-        oreintation = "south"
-        row = 3
-        column = 2
-        dirs = self.find_possible_directions(oreintation,row, column)
-        print(dirs)
+
+        ##TEST
+        termination_row = 4
+        termination_column = 5
+
         ####################
+        self.cost_mat = self.cost_matrix(termination_row, termination_column)
+        self.Optimal_movements , self.Number_Of_Movements = self.value_iteration()
 
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
+        
+        #Publisher to publish orientation correction commands
+        self.orientation_publisher = rospy.Publisher('/autobot/orientation_correction', Int16, queue_size=10)
+        
         print("initialized")
 
     def extract_tile_matrix(self):
@@ -158,9 +163,7 @@ class GoToNNode(DTROS):
         current_tile_type = self.node_matrix[pose_row, pose_column]
         return current_tile_type
 
-    
-    def orientation_correction(self, initial_orientation, initial_tile_type):
-        orientation = initial_orientation
+    def orientation_correction(self, orientation, initial_tile_type):
         
         #defining all orientation boundaries in degrees
         north = 360
@@ -176,8 +179,11 @@ class GoToNNode(DTROS):
         west_ub = 300
         west_lb = 240
 
+        required_rotation = 0
+
         #iterating through the different tile position and reorientating duckiebot
         #orientation order of priority: N -> E -> S -> W
+        #The rotation direction is defined as clock-wise
         if initial_tile_type == 0:
             print('You are on Asphalt, call rescue team')
         
@@ -191,10 +197,26 @@ class GoToNNode(DTROS):
             elif (orientation < south_ub and orientation > south_lb):
                 print('The duckiebot is orientated approximately south. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards north')
-                #rotate the duckiebot by orientation disparity to look north
-                #write function to orientate the duckiebot north
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < south_lb and orientation > north_lb):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    #print('Orientating the Duckiebot by {} too face {}.'format(required_rotation, relevant_direction))
+                
+                elif (orientation < north_ub and orientation > south_lb):
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
 
         if initial_tile_type == 2: 
             #Possible Orientations: E, W
@@ -204,10 +226,31 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards East')
-                #rotate the duckiebot by orientation disparity to look east
-                #write function to orientate the duckiebot east
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < west_lb and orientation > east_lb):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation > west_ub or orientation < east_lb):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+
+                    if (orientation > west_ub):
+                        required_rotation = (360 - orientation) + 90
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                    elif (orientation < east_lb):
+                        required_rotation = 90 - orientation
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
 
         if initial_tile_type == 3:
             #Possible Orientations: S, W 
@@ -217,10 +260,31 @@ class GoToNNode(DTROS):
             elif (orientation < south_ub and orientation > south_lb):
                 print('The duckiebot is orientated approximately South. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards South')
-                #rotate the duckiebot by orientation disparity to look South
-                #write function to orientate the duckiebot South
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < west_lb and orientation > south_lb):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation > west_ub or orientation < south_lb):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+
+                    if (orientation > west_ub):
+                        required_rotation = (360 - orientation) + 180
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                    elif (orientation < south_lb):
+                        required_rotation = 180 - orientation
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
         
         if initial_tile_type == 4:
             #Possible Orientations: N, E
@@ -230,10 +294,26 @@ class GoToNNode(DTROS):
             elif (orientation < north_lb or orientation > north_ub):
                 print('The duckiebot is orientated approximately North. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < north_ub and orientation > east_lb):
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < east_lb and orientation > north_lb):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 90 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+
 
         if initial_tile_type == 5:
             #Possible Orientations: E, S
@@ -243,10 +323,31 @@ class GoToNNode(DTROS):
             elif (orientation < south_ub and orientation > south_lb):
                 print('The duckiebot is orientated approximately South. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards East')
-                #rotate the duckiebot by orientation disparity to look East
-                #write function to orientate the duckiebot East     
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < south_lb and orientation > east_ub):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < east_lb and orientation > south_ub):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+
+                    if (orientation > south_un):
+                        required_rotation = (360 - orientation) + 90
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                    elif (orientation < east_lb):
+                        required_rotation = 90 - orientation
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
 
         if initial_tile_type == 6:
             #Possible Orientation; N, W
@@ -256,10 +357,26 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < north_ub and orientation > west_ub):
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < west_lb and orientation > north_lb):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
 
         if initial_tile_type == 7:
             #Possible orientation Directions: N, S, W
@@ -271,10 +388,31 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < south_lb and orientation > north_lb):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < west_lb or orientation > south_ub):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                elif (orientation < north_ub and orientation > west_ub) :
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
         
         if initial_tile_type == 8:
             #Possible orientation Directions: N, E, S
@@ -286,10 +424,31 @@ class GoToNNode(DTROS):
             elif (orientation < south_ub and orientation > south_lb):
                 print('The duckiebot is orientated approximately South. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < east_lb and orientation > north_lb):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 90 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < south_lb or orientation > east_ub):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                elif (orientation < north_ub and orientation > south_ub) :
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
 
         if initial_tile_type == 9:
             #Possible orientation Directions: E, S, W
@@ -301,10 +460,37 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards East')
-                #rotate the duckiebot by orientation disparity to look East
-                #write function to orientate the duckiebot East
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < south_lb and orientation > east_lb):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < west_lb or orientation > south_ub):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                elif (orientation > west_ub or orientation < east_lb) :
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+                    
+                    if (orientation > west_ub):
+                        required_rotation = (360 - orientation) + 90
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                    
+                    elif (orientation < east_lb):
+                        required_rotation = 90 - orientation
+                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
         
         if initial_tile_type == 10:
             #Possible orientation Directions: N, E, W
@@ -316,10 +502,32 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < east_lb and orientation > north_lb):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 90 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < west_lb or orientation > east_ub):
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                elif (orientation < north_ub and orientation > west_ub) :
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    exit_node()        
+            
 
         if initial_tile_type == 11:
             #Possible orientation Directions: N, E, S, W
@@ -333,10 +541,38 @@ class GoToNNode(DTROS):
             elif (orientation < west_ub and orientation > west_lb):
                 print('The duckiebot is orientated approximately West. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation))
-                print('Orientating the duckiebot towards North')
-                #rotate the duckiebot by orientation disparity to look North
-                #write function to orientate the duckiebot North
+                print('The current orientation is: {}'.format(orientation))
+                
+                #check closest admissible direction:
+                
+                if (orientation < east_lb and orientation > north_lb):
+                    relevant_direction = 'East'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 90 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < south_lb or orientation > east_ub):
+                    relevant_direction = 'South'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 180 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+                
+                elif (orientation < west_lb and orientation > south_ub) :
+                    relevant_direction = 'West'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 270 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                elif (orientation < north_ub and orientation > west_ub) :
+                    relevant_direction = 'North'
+                    print('Orientating to {}'.format(relevant_direction))
+                    required_rotation = 360 - orientation
+                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
+
+                else:
+                    print('Restart Localization')
+                    self.exit_node()        
+            
 
         else:
             print("Please Restart Program")
@@ -371,6 +607,52 @@ class GoToNNode(DTROS):
                     movement_matrix[i,i + transition_point] = 1
         return movement_matrix
 
+    def cost_matrix(self, termination_row, termination_column):
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        cost_mat=np.matmul(self.go_north,np.ones((matrix_size,1)))
+        cost_mat=np.append(cost_mat,np.matmul(self.go_east,np.ones((matrix_size,1))),1)
+        cost_mat=np.append(cost_mat,np.matmul(self.go_west,np.ones((matrix_size,1))),1)
+        cost_mat=np.append(cost_mat,np.matmul(self.go_south,np.ones((matrix_size,1))),1)
+        cost_mat=np.append(cost_mat,np.matmul(self.go_nowhere,1000*np.ones((matrix_size,1))),1)
+        cost_mat[cost_mat < 0.1]=float('inf')
+        cell = termination_row*self.matrix_shape[1] + termination_column
+        cost_mat[cell,4]=0
+        return cost_mat
+
+    def value_iteration(self):
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        V_matrix = np.zeros((matrix_size,1))
+        V_new_matrix = np.zeros((matrix_size,1))
+        I_matrix =np.zeros((matrix_size,1))
+        V_temporary_matrix=100*np.ones((matrix_size,1))
+        V_amound_of_inputs=np.zeros((5,1))
+        iteration_value=0
+        all_movements_matrix = np.append(self.go_north, self.go_east, 1)
+        all_movements_matrix = np.append(all_movements_matrix, self.go_west, 1)
+        all_movements_matrix = np.append(all_movements_matrix, self.go_south, 1)
+        all_movements_matrix = np.append(all_movements_matrix, self.go_nowhere, 1)
+        while 1==1:
+            iteration_value+=1
+            V_temporary_matrix=V_matrix
+            for i in range(0, matrix_size):
+                for k in range(0,5):
+                    Matrix_for_all_Commands=np.matmul(all_movements_matrix[:,matrix_size*k:matrix_size*(k+1)],V_matrix)
+                    V_amound_of_inputs[k]=self.cost_mat[i,k] + Matrix_for_all_Commands[i]
+                V_new_matrix[i]=np.amin(V_amound_of_inputs)
+                I_matrix[i]=np.argmin(V_amound_of_inputs)
+            V_matrix=V_new_matrix
+            print(iteration_value)
+            if iteration_value==200:
+                print("reached maximum iterations")
+                break
+        Optimal_movements=I_matrix
+        Number_Of_Movements=V_matrix
+        Number_Of_Movements[Number_Of_Movements > 1000]=float('inf')
+
+        print(Optimal_movements)
+        print(Number_Of_Movements)
+        return Optimal_movements , Number_Of_Movements
+
     def find_possible_directions(self,in_orientation,row, column):
         cell = row*self.matrix_shape[1] + column
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
@@ -398,8 +680,6 @@ class GoToNNode(DTROS):
                     possible_movements.append(one_possible_move)
 
         return possible_movements
-
-    def 
     
     def callback(self, markerarray):
         marker = markerarray.markers
