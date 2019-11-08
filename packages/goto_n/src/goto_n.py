@@ -679,7 +679,7 @@ class GoToNNode(DTROS):
                 print(i)
                 current_tile = self.node_matrix[row][column]
                 if previous_orientation ==  self.Optimal_movements[cell]:
-                    movement_commands.append("straight")
+                    movement_commands.append("dont_turn")
                 elif previous_orientation == 0 or previous_orientation == 3:
                     if abs(self.Optimal_movements[cell]- previous_orientation) == 1:
                         movement_commands.append("right")
