@@ -159,35 +159,188 @@ class GoToNNode(DTROS):
         return current_tile_type
 
     
-    def orientation_correction(self, orientation, current_tile_type):
+    def orientation_correction(self, initial_orientation, initial_tile_type):
+        orientation = initial_orientation
+        
+        #defining all orientation boundaries in degrees
+        north = 360
+        north_lb = 30
+        north_ub = 330
+        south = 180
+        south_ub = 210
+        south_lb = 150
+        east = 90
+        east_ub = 120
+        east_lb = 60
+        west = 270
+        west_ub = 300
+        west_lb = 240
 
-        if current_tile_type == 0:
+        #iterating through the different tile position and reorientating duckiebot
+        #orientation order of priority: N -> E -> S -> W
+        if initial_tile_type == 0:
             print('You are on Asphalt, call rescue team')
         
         #if it is positioned on the straight N/S tile; default orientation is North
-        if current_tile_type == 1:
-            orientation_disparity = 0 - orientation
-            abs_orientation = abs(orientation_disparity)
-            if (abs_orientation < 45 or abs_orientation > 315):
-                print('The vehicle is orientated in approximately the correct orientation')
-            else:
-                print('The current orientation disparity is: {}'.format(orientation_disparity))
-                print('Orientating the duckiebot towards north')
-                #rotate the duckiebot by orientation disparity to look north
 
-        #if it is positioned on the straigh W/E time; default orientation is East
-        elif current_tile_type == 2:
-            orientation_disparity = 90 - orientation
-            abs_orientation = abs(orientation_disparity)
-            if (abs_orientation < 45 or abs_orientation > 315):
-                print('The vehicle is orientated in approximately the correct orientation')
+        if initial_tile_type == 1:
+            #Possible Orientations: N, S
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately north. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately south. No further changes made.')
             else:
-                print('The current orientation disparity is: {}'.format(orientation_disparity))
+                print('The current orientation disparity is: {}'.format(orientation))
                 print('Orientating the duckiebot towards north')
                 #rotate the duckiebot by orientation disparity to look north
+                #write function to orientate the duckiebot north
+
+        if initial_tile_type == 2: 
+            #Possible Orientations: E, W
+                       
+            if (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards East')
+                #rotate the duckiebot by orientation disparity to look east
+                #write function to orientate the duckiebot east
+
+        if initial_tile_type == 3:
+            #Possible Orientations: S, W 
+                        
+            if (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards South')
+                #rotate the duckiebot by orientation disparity to look South
+                #write function to orientate the duckiebot South
+        
+        if initial_tile_type == 4:
+            #Possible Orientations: N, E
+
+            if (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
+
+        if initial_tile_type == 5:
+            #Possible Orientations: E, S
+
+            if (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards East')
+                #rotate the duckiebot by orientation disparity to look East
+                #write function to orientate the duckiebot East     
+
+        if initial_tile_type == 6:
+            #Possible Orientation; N, W
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
+
+        if initial_tile_type == 7:
+            #Possible orientation Directions: N, S, W
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
+        
+        if initial_tile_type == 8:
+            #Possible orientation Directions: N, E, S
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            elif (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
+
+        if initial_tile_type == 9:
+            #Possible orientation Directions: E, S, W
+            
+            if (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards East')
+                #rotate the duckiebot by orientation disparity to look East
+                #write function to orientate the duckiebot East
+        
+        if initial_tile_type == 10:
+            #Possible orientation Directions: N, E, W
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            elif (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
+
+        if initial_tile_type == 11:
+            #Possible orientation Directions: N, E, S, W
+            
+            if (orientation < north_lb or orientation > north_ub):
+                print('The duckiebot is orientated approximately North. No further changes made.')
+            elif (orientation < east_ub and orientation > east_lb):
+                print('The duckiebot is orientated approximately East. No further changes made.')
+            elif (orientation < south_ub and orientation > south_lb):
+                print('The duckiebot is orientated approximately South. No further changes made.')
+            elif (orientation < west_ub and orientation > west_lb):
+                print('The duckiebot is orientated approximately West. No further changes made.')
+            else:
+                print('The current orientation disparity is: {}'.format(orientation))
+                print('Orientating the duckiebot towards North')
+                #rotate the duckiebot by orientation disparity to look North
+                #write function to orientate the duckiebot North
 
         else:
-            print("have a nice day")
+            print("Please Restart Program")
+
     
     def go_matrix(self,direction):
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
@@ -225,8 +378,8 @@ class GoToNNode(DTROS):
         possible_direction = self.directions
         name_of_possible_direction = self.direction_names
         total_possible_directions = 4
+        
         i = 0
-
         for dir in self.direction_names_reversed:
             if dir == in_orientation:
                 del possible_direction[i]
@@ -238,12 +391,15 @@ class GoToNNode(DTROS):
             for j in range (0,matrix_size):
                 if possible_direction[i][cell][j] > 0:
                     #FIND A WAY TO CONVERT THIS>
-                    
-                    #new_row = j - 
-                    #new_column = j % self.matrix_shape[0]
-                    #one_possible_dir = [name_of_possible_direction[i],new_row,new_column]
+                    print(i)
+                    new_row = int(math.floor(j/self.matrix_shape[1]))
+                    new_column = int(j - new_row*self.matrix_shape[1])
+                    one_possible_move = [name_of_possible_direction[i],new_row,new_column]
+                    possible_movements.append(one_possible_move)
 
-        return one_possible_dir
+        return possible_movements
+
+    def 
     
     def callback(self, markerarray):
         marker = markerarray.markers
