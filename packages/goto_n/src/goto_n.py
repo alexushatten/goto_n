@@ -30,7 +30,6 @@ class GoToNNode(DTROS):
         self.map_name = 'ethz_amod_lab_k31'
         self.map_filename = '/code/catkin_ws/src/goto_n/packages/goto_n/maps/{}.yaml'.format(self.map_name)
         self.map_data = load_map(self.map_filename)
-
         self.map_matrix, self.matrix_shape, self.tile_size = self.extract_tile_matrix()
         self.node_matrix = self.encode_map_structure(self.map_matrix)
         
@@ -46,21 +45,44 @@ class GoToNNode(DTROS):
         self.direction_names_reversed = ["south","west","east","north"]
 
         ##TEST
-        init_row = 1
-        init_column = 2
-        init_compass_dir = 0
-        self.termination_row = 3
-        self.termination_column = 2
-        self.termination_direction = 2
+        all_bot_positions = []
+        #Duckiebot 1
+        duckie_1_name = "duckiebot1"
+        duckie_1_init_row = 1
+        duckie_1_init_column = 2
+        duckie_1_init_compass_dir = 0
+        duckie_1 = [duckie_1_name, duckie_1_init_row, duckie_1_init_column, duckie_1_init_compass_dir]
+        all_bot_positions.append(duckie_1)
+        #Duckiebot 2
+        #duckie_2_name = "duckiebot2"
+        #duckie_2_init_row = 0
+        #duckie_2_init_column = 3
+        #duckie_2_init_compass_dir = 1
+        #duckie_2 = [duckie_2_name, duckie_2_init_row, duckie_2_init_column, duckie_2_init_compass_dir]
+        #all_bot_positions.append(duckie_2)
+        #Termination 1
+        all_termination_positions = []
+        #termination_row_1 = 3
+        #termination_column_1 = 2
+        #termination_direction_1 = 2
+        #termination_1 = [termination_row_1, termination_column_1, termination_direction_1]
+        #all_termination_positions.append(termination_1)
+        #Termination 2
+        termination_row_2 = 5
+        termination_column_2 = 4
+        termination_direction_2 = 1
+        termination_2 = [termination_row_2, termination_column_2, termination_direction_2]
+        all_termination_positions.append(termination_2)
+        #print (all_bot_positions)
+        #print (all_bot_positions[0][0])
+        cost_mat = self.cost_matrix(all_termination_positions, all_bot_positions, all_bot_positions[0])
+        Optimal_movements , Number_Of_Movements = self.value_iteration(cost_mat)
 
-        self.cost_mat = self.cost_matrix(self.termination_row, self.termination_column, self.termination_direction, init_row, init_column, init_compass_dir)
-        self.Optimal_movements , self.Number_Of_Movements = self.value_iteration()
-
-        self.movememt_commands = self.find_robot_commands(init_compass_dir,init_row,init_column)
-        print (self.movememt_commands)
+        movememt_commands = self.find_robot_commands(all_bot_positions[0], Optimal_movements, Number_Of_Movements)
+        print (movememt_commands)
         ####################
         #Start localization subscriber
-        self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
+        #self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
 
         #Publisher to publish orientation correction commands
         self.orientation_publisher = rospy.Publisher('/autobot/orientation_correction', Int16, queue_size=10)
@@ -610,7 +632,7 @@ class GoToNNode(DTROS):
                     movement_matrix[i,i + transition_point] = 1
         return movement_matrix
 
-    def cost_matrix(self, termination_row, termination_column, termination_direction, init_row, init_column, init_direction):
+    def cost_matrix(self, all_termination_positions, all_bot_positions, current_bot_position):
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
         cost_mat=np.matmul(self.go_north,np.ones((matrix_size,1)))
         cost_mat=np.append(cost_mat,np.matmul(self.go_east,np.ones((matrix_size,1))),1)
@@ -619,40 +641,67 @@ class GoToNNode(DTROS):
         cost_mat=np.append(cost_mat,np.matmul(self.go_nowhere,1000*np.ones((matrix_size,1))),1)
         cost_mat[cost_mat < 0.1]=float('inf')
 
-        #Add 0 cost to desired location
-        cell = termination_row*self.matrix_shape[1] + termination_column
-        cost_mat[cell,4]=0
-        
+        #Add all termination points
+        for termination_point in all_termination_positions:
+            termination_row = termination_point[0]
+            termination_column = termination_point[1]
+            termination_direction = termination_point[2]
 
-        #Add inf cost to direction oposite of enddirection in the cell next to it
-        if termination_direction == 0:
-            neighbourcell = cell - self.matrix_shape[1] 
-            cost_mat[neighbourcell,3] = float('inf')
-        if termination_direction == 1:
-            neighbourcell = cell + 1
-            cost_mat[neighbourcell,2] = float('inf')
-        if termination_direction == 2:
-            neighbourcell = cell - 1
-            cost_mat[neighbourcell,1] = float('inf')
-        if termination_direction == 3:
-            neighbourcell = cell - self.matrix_shape[1] 
-            cost_mat[neighbourcell,0] = float('inf')
+            #Add 0 cost to desired location
+            cell = termination_row*self.matrix_shape[1] + termination_column
+            cost_mat[cell,4]=0
+            
 
-        #Add inf cost to direction oposite of startdirection in startcell
-        start_cell = init_row*self.matrix_shape[1] + init_column
+            #Add inf cost to direction oposite of enddirection in the cell next to it
+            if termination_direction == 0:
+                neighbourcell = cell - self.matrix_shape[1] 
+                cost_mat[neighbourcell,3] = float('inf')
+            if termination_direction == 1:
+                neighbourcell = cell + 1
+                cost_mat[neighbourcell,2] = float('inf')
+            if termination_direction == 2:
+                neighbourcell = cell - 1
+                cost_mat[neighbourcell,1] = float('inf')
+            if termination_direction == 3:
+                neighbourcell = cell - self.matrix_shape[1] 
+                cost_mat[neighbourcell,0] = float('inf')
 
-        if init_direction == 0:
+        #Add inf cost to direction oposite of startdirection in startcell of the currents bot position
+        current_name = current_bot_position[0]
+        current_init_row = current_bot_position[1]
+        current_init_column = current_bot_position[2]
+        current_init_direction = current_bot_position[3]
+        start_cell = current_init_row*self.matrix_shape[1] + current_init_column
+
+        if current_init_direction == 0:
             cost_mat[start_cell,3] = float('inf')
-        if init_direction == 1:
+        if current_init_direction == 1:
             cost_mat[start_cell,2] = float('inf')
-        if init_direction == 2:
+        if current_init_direction == 2:
             cost_mat[start_cell,1] = float('inf')
-        if init_direction == 3:
+        if current_init_direction == 3:
             cost_mat[start_cell,0] = float('inf')
 
+        for other_bot_position in all_bot_positions:
+
+            other_name = other_bot_position[0]
+            #Skip the bot you are currently calculating the map for
+            if other_name == current_name:
+                continue
+            
+            print("I am adding second robot")
+            other_init_row = other_bot_position[1]
+            other_init_column = other_bot_position[2]
+            other_init_direction = other_bot_position[3]
+
+            other_cell = other_init_row*self.matrix_shape[1] + other_init_column
+            
+            cost_mat[other_cell,other_init_direction] = float('inf')
+
+        print(cost_mat)
         return cost_mat
 
-    def value_iteration(self):
+    def value_iteration(self, cost_mat):
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
         V_matrix = np.zeros((matrix_size,1))
         V_new_matrix = np.zeros((matrix_size,1))
@@ -670,7 +719,7 @@ class GoToNNode(DTROS):
             for i in range(0, matrix_size):
                 for k in range(0,5):
                     Matrix_for_all_Commands=np.matmul(all_movements_matrix[:,matrix_size*k:matrix_size*(k+1)],V_matrix)
-                    V_amound_of_inputs[k]=self.cost_mat[i,k] + Matrix_for_all_Commands[i]
+                    V_amound_of_inputs[k]=cost_mat[i,k] + Matrix_for_all_Commands[i]
                 V_new_matrix[i]=np.amin(V_amound_of_inputs)
                 I_matrix[i]=np.argmin(V_amound_of_inputs)
             V_matrix=V_new_matrix
@@ -684,13 +733,18 @@ class GoToNNode(DTROS):
         print(Optimal_movements)
         return Optimal_movements , Number_Of_Movements.astype(int)
 
-    def find_robot_commands(self, orientation, row, column):
+    def find_robot_commands(self, bot_position_and_orientation, optimal_movements, number_of_movements):
+        name = bot_position_and_orientation[0]
+        row = bot_position_and_orientation[1]
+        column = bot_position_and_orientation[2]
+        orientation = bot_position_and_orientation[3]
+        
         cell = row*self.matrix_shape[1] + column
         movement_commands = []
         current_orientation = orientation
         previous_orientation = orientation
-        for i in range (0, self.Number_Of_Movements[cell]):
-            compass_movement = self.Optimal_movements[cell]
+        for i in range (0, number_of_movements[cell]):
+            compass_movement = optimal_movements[cell]
             if compass_movement == 0:
                 transition_point = -self.matrix_shape[1]
             elif compass_movement == 1:
@@ -702,25 +756,25 @@ class GoToNNode(DTROS):
             
             if self.node_matrix[row][column] > 6:
                 current_tile = self.node_matrix[row][column]
-                if previous_orientation ==  self.Optimal_movements[cell]:
+                if previous_orientation ==  optimal_movements[cell]:
                     movement_commands.append("dont_turn")
                 elif previous_orientation == 0 or previous_orientation == 3:
-                    if abs(self.Optimal_movements[cell]- previous_orientation) == 1:
+                    if abs(optimal_movements[cell]- previous_orientation) == 1:
                         movement_commands.append("right")
-                    if abs(self.Optimal_movements[cell] - previous_orientation) == 2:
+                    if abs(optimal_movements[cell] - previous_orientation) == 2:
                         movement_commands.append("left")
                 
                 elif previous_orientation == 1 or previous_orientation == 2:
-                    print(self.Optimal_movements[cell] - previous_orientation)
-                    if abs(self.Optimal_movements[cell]- previous_orientation) == 2:
+                    print(optimal_movements[cell] - previous_orientation)
+                    if abs(optimal_movements[cell]- previous_orientation) == 2:
                         movement_commands.append("right")
-                    if abs(self.Optimal_movements[cell] - previous_orientation) == 1:
+                    if abs(optimal_movements[cell] - previous_orientation) == 1:
                         movement_commands.append("left")
 
             else:
                 movement_commands.append("straight")
 
-            previous_orientation = self.Optimal_movements[cell]
+            previous_orientation = optimal_movements[cell]
             cell = cell + transition_point
             row = int(math.floor(cell/self.matrix_shape[1]))
             column = int(cell - row*self.matrix_shape[1])
@@ -778,7 +832,6 @@ class GoToNNode(DTROS):
         for bots in marker: 
             if bots.ns == "duckiebots":
                 #Set duckiebots position and orientation
-                duckiebot_name = bots.ns
                 duckiebot_x = bots.pose.position.x
                 duckiebot_y = bots.pose.position.y
                 duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
