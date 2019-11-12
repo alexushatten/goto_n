@@ -6,8 +6,9 @@ import os
 import rospy
 import yaml
 import math
+from itertools import permutations
 
-from std_msgs.msg import Int16
+from std_msgs.msg import Int32MultiArray
 from duckietown import DTROS
 from sensor_msgs.msg import CompressedImage
 from duckietown_msgs.msg import WheelsCmdStamped
@@ -44,44 +45,57 @@ class GoToNNode(DTROS):
         self.direction_names = ["north","east","west","south"]
         self.direction_names_reversed = ["south","west","east","north"]
 
-        ##TEST ## VARIABLES THAT COMES FROM CALLBACK
-        all_bot_positions = []
-        #Duckiebot 1
-        duckie_1_name = "duckiebot1"
-        duckie_1_init_row = 1
-        duckie_1_init_column = 2
-        duckie_1_init_compass_dir = 0
-        duckie_1 = [duckie_1_name, duckie_1_init_row, duckie_1_init_column, duckie_1_init_compass_dir]
-        all_bot_positions.append(duckie_1)
-        #Duckiebot 2
-        duckie_2_name = "duckiebot2"
-        duckie_2_init_row = 0
-        duckie_2_init_column = 3
-        duckie_2_init_compass_dir = 1
-        duckie_2 = [duckie_2_name, duckie_2_init_row, duckie_2_init_column, duckie_2_init_compass_dir]
-        all_bot_positions.append(duckie_2)
-        #Termination 1
-        all_termination_positions = []
+        #Termination 1############################################################### ADD IN PARAMS
+        self.all_termination_positions = []
         termination_row_1 = 3
         termination_column_1 = 1
         termination_direction_1 = 2
         termination_1 = [termination_row_1, termination_column_1, termination_direction_1]
-        all_termination_positions.append(termination_1)
+        self.all_termination_positions.append(termination_1)
         #Termination 2
         termination_row_2 = 3
         termination_column_2 = 4
         termination_direction_2 = 2
         termination_2 = [termination_row_2, termination_column_2, termination_direction_2]
-        all_termination_positions.append(termination_2)
+        self.all_termination_positions.append(termination_2)
+        #Termination 3
+        termination_row_3 = 0
+        termination_column_3 = 1
+        termination_direction_3 = 1
+        termination_3 = [termination_row_3, termination_column_3, termination_direction_3]
+        self.all_termination_positions.append(termination_3)
+        #############################################################################################
+        all_bot_positions = []
+        bot_1_name = "bot1"
+        bot_row_1 = 4
+        bot_column_1 = 2
+        bot_direction_1 = 0
+        bot_1 = [bot_1_name, bot_row_1, bot_column_1, bot_direction_1]
+        all_bot_positions.append(bot_1)
+        bot_2_name = "bot2"
+        bot_row_2 = 5
+        bot_column_2 = 4
+        bot_direction_2 = 2
+        bot_2 = [bot_2_name, bot_row_2, bot_column_2, bot_direction_2]
+        all_bot_positions.append(bot_2)
+        bot_3_name = "bot3"
+        bot_row_3 = 1
+        bot_column_3 = 0
+        bot_direction_3 = 0
+        bot_3 = [bot_3_name, bot_row_3, bot_column_3, bot_direction_3]
+        all_bot_positions.append(bot_3)
 
-        plan = self.planner(all_bot_positions, all_termination_positions)
+        all_combinations = list(permutations(all_bot_positions,3))
+        all_plans = []
+        for one_combination in all_combinations:
+            plan = self.planner(list(one_combination))
+            all_plans.append(plan)
+        print all_plans
+        #Set up message process
+        self.message_recieved = False
 
-        print (plan)
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
-
-        #Publisher to publish orientation correction commands
-        self.orientation_publisher = rospy.Publisher('/autobot/orientation_correction', Int16, queue_size=10)
         
         print("initialized")
 
@@ -749,27 +763,27 @@ class GoToNNode(DTROS):
             if self.node_matrix[row][column] > 6:
                 current_tile = self.node_matrix[row][column]
                 if previous_orientation ==  optimal_movements[cell]:
-                    movement_commands.append("dont_turn")
+                    movement_commands.append(2) #DONT TURN
                 elif previous_orientation == 0 or previous_orientation == 3:
                     if abs(optimal_movements[cell]- previous_orientation) == 1:
-                        movement_commands.append("right")
+                        movement_commands.append(4) #RIGHT
                     if abs(optimal_movements[cell] - previous_orientation) == 2:
-                        movement_commands.append("left")
+                        movement_commands.append(3) #LEFT
                 
                 elif previous_orientation == 1 or previous_orientation == 2:
                     if abs(optimal_movements[cell]- previous_orientation) == 2:
-                        movement_commands.append("right")
+                        movement_commands.append(4) #RIGHT
                     if abs(optimal_movements[cell] - previous_orientation) == 1:
-                        movement_commands.append("left")
+                        movement_commands.append(3) #LEFT
 
             else:
-                movement_commands.append("straight")
+                movement_commands.append(1) #STRAIGHT
 
             previous_orientation = optimal_movements[cell]
             cell = cell + transition_point
             row = int(math.floor(cell/self.matrix_shape[1]))
             column = int(cell - row*self.matrix_shape[1])
-        movement_commands.append("stop")
+        movement_commands.append(0) #STOP
         return total_number_of_moments, movement_commands
 
 
@@ -817,62 +831,72 @@ class GoToNNode(DTROS):
         
         return compass
     
-    def planner(self, bot_positions, termination_positions):
-        ### MOVE THIS INTO FUNCTION WHEN CALLBACK WORKS!
+    def planner(self, bot_positions):
+        termination_positions = self.all_termination_positions
         changing_bot_positions = bot_positions
         bot_messages = []
+        print(self.all_termination_positions)
 
         i = 0
         for current_bot in bot_positions:
             different_movement_options = []
+            total_tiles_list = []
             #Which termination_point it will end op on
             for termination_point in termination_positions:
                 cost_mat = self.cost_matrix(termination_point, changing_bot_positions, current_bot)
                 Optimal_movements , Number_Of_Movements = self.value_iteration(cost_mat)
                 total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, Optimal_movements, Number_Of_Movements)
-                different_movement_options.append ([total_tiles_to_move, movememt_commands, termination_point])
+                different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
+                total_tiles_list.append(total_tiles_to_move)
 
-            best_choise = min(different_movement_options[:])
-            minimum_choise_index = different_movement_options.index(min(different_movement_options[:]))
-            changing_bot_positions[i] = [current_bot[0]] + different_movement_options[minimum_choise_index][2]
-            del termination_positions[minimum_choise_index]
-            message_to_robot = [current_bot[0]] + [best_choise[1]] + [best_choise[0]]
+            minimum_index = total_tiles_list.index(min(total_tiles_list))
+            best_choice = different_movement_options[minimum_index]
+            changing_bot_positions[i] = [current_bot[0]] + different_movement_options[minimum_index][2]
+            message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [termination_positions[minimum_index]]
+            del termination_positions[minimum_index]
             bot_messages.append(message_to_robot)
             i += 1
-        
+        print("reached here")
         return bot_messages
 
 
     def callback(self, markerarray):
         marker = markerarray.markers
-        for bots in marker: 
-            if bots.ns == "duckiebots":
-                #Set duckiebots position and orientation
-                duckiebot_x = bots.pose.position.x
-                duckiebot_y = bots.pose.position.y
-                duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
+        all_bot_positions = []
+        if self.message_recieved == False:
+            for bots in marker: 
+                if bots.ns == "duckiebots":
+                    #Set duckiebots position and orientation
+                    duckiebot_name = "autobot{}".format(bots.id)
+                    duckiebot_x = bots.pose.position.x
+                    duckiebot_y = bots.pose.position.y
+                    duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
 
-                duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
-                
-                #Find duckiebots tile column and row
-                duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
-                #Find what type of tile robot is on
-                current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
+                    duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
+                    
+                    #Find duckiebots tile column and row
+                    duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
+                    
+                    ################################DOLATER#############################################
+                    #Find what type of tile robot is on
+                    #current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
 
-                #Correct orientation, if robot is not facing any of the directions possible
-                ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
-                
-                #Find costfunction
-                duckie_cost_mat = self.cost_matrix(self.termination_row, self.termination_column, self.termination_direction, duckiebot_row, duckiebot_column, duckie_compass_notation)
-                duckie_Optimal_movements , self.Number_Of_Movements = self.value_iteration()
-                
-                #Find the commands to send to duckiebot
-                duckie_movememt_commands = self.find_robot_commands(compass_direction,duckiebot_row,duckiebot_column)
+                    #Correct orientation, if robot is not facing any of the directions possible
+                    ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
+                    
+                    duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
+                    all_bot_positions.append(duckie)
 
-                #Create a publisher for each duckiebot
-                command_publisher = rospy.Publisher('/{}/movement_commands'.format(duckiebot_name), StringArray, queue_size=10)
+                    self.message_recieved = True
 
-                print (self.movememt_commands)
+
+            plan = self.planner(all_bot_positions)
+            for command in plan:
+                print(command)
+                command_publisher = rospy.Publisher('/{}/movement_commands'.format(command[0]), Int32MultiArray, queue_size=10)
+                message = Int32MultiArray()
+                message.data = command[1]
+                command_publisher.publish(message)
 
             
 
