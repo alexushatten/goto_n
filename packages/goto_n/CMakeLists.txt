@@ -3,6 +3,11 @@ project(goto_n)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
+  duckietown_msgs
 )
 
 catkin_package()
+
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)

@@ -87,10 +87,14 @@ class GoToNNode(DTROS):
 
         all_combinations = list(permutations(all_bot_positions,3))
         all_plans = []
+        total_movements = []
         for one_combination in all_combinations:
-            plan = self.planner(list(one_combination))
+            plan, movements = self.planner(list(one_combination))
             all_plans.append(plan)
-        print all_plans
+            total_movements.append(movements)
+        minimum_plan_index = total_movements.index(min(total_movements))
+        best_plan = all_plans[minimum_plan_index]
+        print (best_plan)
         #Set up message process
         self.message_recieved = False
 
@@ -720,7 +724,8 @@ class GoToNNode(DTROS):
         all_movements_matrix = np.append(all_movements_matrix, self.go_west, 1)
         all_movements_matrix = np.append(all_movements_matrix, self.go_south, 1)
         all_movements_matrix = np.append(all_movements_matrix, self.go_nowhere, 1)
-        while 1==1:
+        iterate = True
+        while iterate == True:
             iteration_value+=1
             V_temporary_matrix=V_matrix
             for i in range(0, matrix_size):
@@ -730,8 +735,8 @@ class GoToNNode(DTROS):
                 V_new_matrix[i]=np.amin(V_amound_of_inputs)
                 I_matrix[i]=np.argmin(V_amound_of_inputs)
             V_matrix=V_new_matrix
-            if iteration_value==200:
-                break
+            if iteration_value==matrix_size:
+                iterate = False
         Optimal_movements=I_matrix
         Number_Of_Movements=V_matrix
         Number_Of_Movements[Number_Of_Movements > 1000]=float('inf')
@@ -833,9 +838,10 @@ class GoToNNode(DTROS):
     
     def planner(self, bot_positions):
         termination_positions = self.all_termination_positions
+        skip_termination = []
         changing_bot_positions = bot_positions
         bot_messages = []
-        print(self.all_termination_positions)
+        total_movements = 0
 
         i = 0
         for current_bot in bot_positions:
@@ -843,21 +849,23 @@ class GoToNNode(DTROS):
             total_tiles_list = []
             #Which termination_point it will end op on
             for termination_point in termination_positions:
+                if termination_point in skip_termination:
+                    continue
                 cost_mat = self.cost_matrix(termination_point, changing_bot_positions, current_bot)
                 Optimal_movements , Number_Of_Movements = self.value_iteration(cost_mat)
                 total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, Optimal_movements, Number_Of_Movements)
                 different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
                 total_tiles_list.append(total_tiles_to_move)
+                total_movements = total_movements + total_tiles_to_move
 
             minimum_index = total_tiles_list.index(min(total_tiles_list))
             best_choice = different_movement_options[minimum_index]
             changing_bot_positions[i] = [current_bot[0]] + different_movement_options[minimum_index][2]
             message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [termination_positions[minimum_index]]
-            del termination_positions[minimum_index]
+            skip_termination.append(termination_positions[minimum_index])
             bot_messages.append(message_to_robot)
             i += 1
-        print("reached here")
-        return bot_messages
+        return bot_messages, total_movements
 
 
     def callback(self, markerarray):
