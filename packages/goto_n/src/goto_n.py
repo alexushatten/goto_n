@@ -9,6 +9,7 @@ import math
 from itertools import permutations
 
 from std_msgs.msg import Int32MultiArray
+from std_msgs.msg import String
 from duckietown import DTROS
 from sensor_msgs.msg import CompressedImage
 from duckietown_msgs.msg import WheelsCmdStamped
@@ -85,21 +86,21 @@ class GoToNNode(DTROS):
         bot_3 = [bot_3_name, bot_row_3, bot_column_3, bot_direction_3]
         all_bot_positions.append(bot_3)
 
-        all_combinations = list(permutations(all_bot_positions,3))
-        all_plans = []
-        total_movements = []
-        for one_combination in all_combinations:
-            plan, movements = self.planner(list(one_combination))
-            all_plans.append(plan)
-            total_movements.append(movements)
-        minimum_plan_index = total_movements.index(min(total_movements))
-        best_plan = all_plans[minimum_plan_index]
-        print (best_plan)
         #Set up message process
         self.message_recieved = False
 
         #Start localization subscriber
         self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
+
+        self.command_publisher = rospy.Publisher('/autobot22/movement_commands', Int32MultiArray, queue_size=10)
+
+        rate = rospy.Rate(10) # 10hz
+        pum_msg=Int32MultiArray()        
+        while not rospy.is_shutdown():
+            message = [1,2,3,2,1,2,3,2,1]
+            pum_msg=Int32MultiArray(data=message)
+            self.command_publisher.publish(pum_msg)
+            rate.sleep()
         
         print("initialized")
 
@@ -149,7 +150,6 @@ class GoToNNode(DTROS):
                     node_matrix[i,j] = 11
 
         return node_matrix
-
 
     def find_current_tile(self,pose_x, pose_y):
         number_of_rows = self.matrix_shape[0]
@@ -202,421 +202,6 @@ class GoToNNode(DTROS):
         current_tile_type = self.node_matrix[pose_row, pose_column]
         return current_tile_type
 
-    def orientation_correction(self, orientation, initial_tile_type):
-        
-        #defining all orientation boundaries in degrees
-        north = 360
-        north_lb = 30
-        north_ub = 330
-        south = 180
-        south_ub = 210
-        south_lb = 150
-        east = 90
-        east_ub = 120
-        east_lb = 60
-        west = 270
-        west_ub = 300
-        west_lb = 240
-
-        required_rotation = 0
-
-        #iterating through the different tile position and reorientating duckiebot
-        #orientation order of priority: N -> E -> S -> W
-        #The rotation direction is defined as clock-wise
-        if initial_tile_type == 0:
-            print('You are on Asphalt, call rescue team')
-        
-        #if it is positioned on the straight N/S tile; default orientation is North
-
-        if initial_tile_type == 1:
-            #Possible Orientations: N, S
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately north. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately south. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < south_lb and orientation > north_lb):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    #print('Orientating the Duckiebot by {} too face {}.'format(required_rotation, relevant_direction))
-                
-                elif (orientation < north_ub and orientation > south_lb):
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-
-        if initial_tile_type == 2: 
-            #Possible Orientations: E, W
-                       
-            if (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < west_lb and orientation > east_lb):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation > west_ub or orientation < east_lb):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-
-                    if (orientation > west_ub):
-                        required_rotation = (360 - orientation) + 90
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                    elif (orientation < east_lb):
-                        required_rotation = 90 - orientation
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-
-        if initial_tile_type == 3:
-            #Possible Orientations: S, W 
-                        
-            if (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < west_lb and orientation > south_lb):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation > west_ub or orientation < south_lb):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-
-                    if (orientation > west_ub):
-                        required_rotation = (360 - orientation) + 180
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                    elif (orientation < south_lb):
-                        required_rotation = 180 - orientation
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-        
-        if initial_tile_type == 4:
-            #Possible Orientations: N, E
-
-            if (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < north_ub and orientation > east_lb):
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < east_lb and orientation > north_lb):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 90 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-
-
-        if initial_tile_type == 5:
-            #Possible Orientations: E, S
-
-            if (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < south_lb and orientation > east_ub):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < east_lb and orientation > south_ub):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-
-                    if (orientation > south_un):
-                        required_rotation = (360 - orientation) + 90
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                    elif (orientation < east_lb):
-                        required_rotation = 90 - orientation
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-
-        if initial_tile_type == 6:
-            #Possible Orientation; N, W
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < north_ub and orientation > west_ub):
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < west_lb and orientation > north_lb):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-
-        if initial_tile_type == 7:
-            #Possible orientation Directions: N, S, W
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < south_lb and orientation > north_lb):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < west_lb or orientation > south_ub):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                elif (orientation < north_ub and orientation > west_ub) :
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-        
-        if initial_tile_type == 8:
-            #Possible orientation Directions: N, E, S
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            elif (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < east_lb and orientation > north_lb):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 90 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < south_lb or orientation > east_ub):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                elif (orientation < north_ub and orientation > south_ub) :
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-
-        if initial_tile_type == 9:
-            #Possible orientation Directions: E, S, W
-            
-            if (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < south_lb and orientation > east_lb):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < west_lb or orientation > south_ub):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                elif (orientation > west_ub or orientation < east_lb) :
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-                    
-                    if (orientation > west_ub):
-                        required_rotation = (360 - orientation) + 90
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                    
-                    elif (orientation < east_lb):
-                        required_rotation = 90 - orientation
-                        print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-        
-        if initial_tile_type == 10:
-            #Possible orientation Directions: N, E, W
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            elif (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < east_lb and orientation > north_lb):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 90 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < west_lb or orientation > east_ub):
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                elif (orientation < north_ub and orientation > west_ub) :
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    exit_node()        
-            
-
-        if initial_tile_type == 11:
-            #Possible orientation Directions: N, E, S, W
-            
-            if (orientation < north_lb or orientation > north_ub):
-                print('The duckiebot is orientated approximately North. No further changes made.')
-            elif (orientation < east_ub and orientation > east_lb):
-                print('The duckiebot is orientated approximately East. No further changes made.')
-            elif (orientation < south_ub and orientation > south_lb):
-                print('The duckiebot is orientated approximately South. No further changes made.')
-            elif (orientation < west_ub and orientation > west_lb):
-                print('The duckiebot is orientated approximately West. No further changes made.')
-            else:
-                print('The current orientation is: {}'.format(orientation))
-                
-                #check closest admissible direction:
-                
-                if (orientation < east_lb and orientation > north_lb):
-                    relevant_direction = 'East'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 90 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < south_lb or orientation > east_ub):
-                    relevant_direction = 'South'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 180 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-                
-                elif (orientation < west_lb and orientation > south_ub) :
-                    relevant_direction = 'West'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 270 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                elif (orientation < north_ub and orientation > west_ub) :
-                    relevant_direction = 'North'
-                    print('Orientating to {}'.format(relevant_direction))
-                    required_rotation = 360 - orientation
-                    print('Orientating the Duckiebot by {} too face {}.'.format(required_rotation, relevant_direction))
-
-                else:
-                    print('Restart Localization')
-                    self.exit_node()        
-            
-
-        else:
-            print("Please Restart Program")
-
-    
     def go_matrix(self,direction):
         matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
         movement_matrix = np.zeros((matrix_size,matrix_size))
@@ -791,34 +376,6 @@ class GoToNNode(DTROS):
         movement_commands.append(0) #STOP
         return total_number_of_moments, movement_commands
 
-
-    def find_possible_directions(self,in_orientation,row, column):
-        cell = row*self.matrix_shape[1] + column
-        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
-        possible_movements = []
-        possible_direction = self.directions
-        name_of_possible_direction = self.direction_names
-        total_possible_directions = 4
-        
-        i = 0
-        for dir in self.direction_names_reversed:
-            if dir == in_orientation:
-                del possible_direction[i]
-                del name_of_possible_direction[i]
-                total_possible_directions -=1
-            i += 1
-
-        for i in range(total_possible_directions):
-            for j in range (0,matrix_size):
-                if possible_direction[i][cell][j] > 0:
-                    #FIND A WAY TO CONVERT THIS>
-                    new_row = int(math.floor(j/self.matrix_shape[1]))
-                    new_column = int(j - new_row*self.matrix_shape[1])
-                    one_possible_move = [name_of_possible_direction[i],new_row,new_column]
-                    possible_movements.append(one_possible_move)
-
-        return possible_movements
-
     def find_compass_notation(self, deg):
         compass = 0
         #North
@@ -867,7 +424,6 @@ class GoToNNode(DTROS):
             i += 1
         return bot_messages, total_movements
 
-
     def callback(self, markerarray):
         marker = markerarray.markers
         all_bot_positions = []
@@ -894,21 +450,35 @@ class GoToNNode(DTROS):
                     
                     duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
                     all_bot_positions.append(duckie)
-
                     self.message_recieved = True
+            all_combinations = list(permutations(all_bot_positions,3))
+            all_plans = []
+            total_movements = []
+            for one_combination in all_combinations:
+                plan, movements = self.planner(list(one_combination))
+                all_plans.append(plan)
+                total_movements.append(movements)
 
+            minimum_plan_index = total_movements.index(min(total_movements))
+            best_plan = all_plans[minimum_plan_index]
+            print (best_plan)
 
-            plan = self.planner(all_bot_positions)
-            for command in plan:
+            """             for command in best_plan:
                 print(command)
                 command_publisher = rospy.Publisher('/{}/movement_commands'.format(command[0]), Int32MultiArray, queue_size=10)
                 message = Int32MultiArray()
                 message.data = command[1]
                 command_publisher.publish(message)
+            """
+            rate = rospy.Rate(10) # 10hz
+            pum_msg=Int32MultiArray()        
+            while not rospy.is_shutdown():
+                message = [1,2,3,2,1,2,3,2,1]
+                pum_msg=Int32MultiArray(data=message)
+                self.command_publisher.publish(pum_msg)
+                rate.sleep()
 
             
-
-
 if __name__ == '__main__':
     # Initialize the node
     goto_node = GoToNNode(node_name='goto_n')
