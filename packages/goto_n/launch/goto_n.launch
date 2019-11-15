@@ -1,5 +1,7 @@
 <launch>
+  <arg name="param_file_name" default="watchtowers"/>
 
-  <node pkg="goto_n" type="goto_n.py" name="goto_n" output="screen"/>
-
+  <node pkg="goto_n" type="goto_n.py" name="goto_n" output="screen">
+    <rosparam command="load" file="$(find goto_n)/config/$(arg param_file_name).yaml"/>
+  </node>
 </launch>

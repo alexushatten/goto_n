@@ -10,11 +10,13 @@ from itertools import permutations
 
 from std_msgs.msg import Int32MultiArray
 from std_msgs.msg import String
+from std_msgs.msg import Bool
 from duckietown import DTROS
 from sensor_msgs.msg import CompressedImage
 from duckietown_msgs.msg import WheelsCmdStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from duckietown_utils import load_map
+
 
 #To print whole array
 import sys
@@ -94,7 +96,18 @@ class GoToNNode(DTROS):
 
         self.command_publisher = rospy.Publisher('/autobot22/movement_commands', Int32MultiArray, queue_size=10)
 
+        self.watchtowers_list = rospy.get_param('~watchtowers_list')
+        self.image_request=[]
+        for watchtower in self.watchtowers_list:
+            self.image_request.append(rospy.Publisher('/'+watchtower+'/'+"requestImage",Bool,queue_size=1))
+
         rate = rospy.Rate(10) # 10hz
+        msg_sended = Bool()
+        rospy.sleep(1)
+        msg_sended.data = True 
+        for i in range(0,len(self.watchtowers_list)):
+            self.image_request[i].publish(msg_sended)
+        
         pum_msg=Int32MultiArray()        
         while not rospy.is_shutdown():
             message = [1,2,3,2,1,2,3,2,1]
@@ -102,6 +115,9 @@ class GoToNNode(DTROS):
             self.command_publisher.publish(pum_msg)
             rate.sleep()
         
+
+
+
         print("initialized")
 
     def extract_tile_matrix(self):
@@ -451,7 +467,7 @@ class GoToNNode(DTROS):
                     duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
                     all_bot_positions.append(duckie)
                     self.message_recieved = True
-            all_combinations = list(permutations(all_bot_positions,3))
+            """             all_combinations = list(permutations(all_bot_positions,3))
             all_plans = []
             total_movements = []
             for one_combination in all_combinations:
@@ -460,8 +476,8 @@ class GoToNNode(DTROS):
                 total_movements.append(movements)
 
             minimum_plan_index = total_movements.index(min(total_movements))
-            best_plan = all_plans[minimum_plan_index]
-            print (best_plan)
+            best_plan = all_plans[minimum_plan_index] """
+            print (all_bot_positions)
 
             """             for command in best_plan:
                 print(command)
@@ -470,13 +486,13 @@ class GoToNNode(DTROS):
                 message.data = command[1]
                 command_publisher.publish(message)
             """
-            rate = rospy.Rate(10) # 10hz
+            """             rate = rospy.Rate(10) # 10hz
             pum_msg=Int32MultiArray()        
             while not rospy.is_shutdown():
                 message = [1,2,3,2,1,2,3,2,1]
                 pum_msg=Int32MultiArray(data=message)
                 self.command_publisher.publish(pum_msg)
-                rate.sleep()
+                rate.sleep() """
 
             
 if __name__ == '__main__':
