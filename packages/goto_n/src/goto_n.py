@@ -169,13 +169,19 @@ class GoToNNode(DTROS):
 
     def find_current_tile(self,pose_x, pose_y):
         number_of_rows = self.matrix_shape[0]
+        number_of_columns = self.matrix_shape[1]
         #Change representation to crows and colunmns THIS IS MESSY
-        tile_column = int((self.tile_size/2) + pose_x/self.tile_size) - 1
+        tile_column = int(round((self.tile_size/2) + pose_x/self.tile_size) - 1)
+
         if tile_column < 0:
             tile_column = 0
-        tile_row = number_of_rows - int((self.tile_size/2) + pose_y/self.tile_size) - 1
+        if tile_column > number_of_columns - 1:
+            tile_column = number_of_columns - 1
+        tile_row = int((number_of_rows - 1) - round((self.tile_size/2) + pose_y/self.tile_size - 1))
         if tile_row < 0:
             tile_row = 0
+        elif tile_row > number_of_rows - 1:
+            tile_row = number_of_rows - 1
         return tile_row, tile_column
     
     def quat_to_compass(self, q):
@@ -450,7 +456,10 @@ class GoToNNode(DTROS):
                     duckiebot_name = "autobot{}".format(bots.id)
                     duckiebot_x = bots.pose.position.x
                     duckiebot_y = bots.pose.position.y
+
                     duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
+
+                    print(duckiebot_x,duckiebot_y,duckiebot_orientation)
 
                     duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
                     
