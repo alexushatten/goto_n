@@ -44,10 +44,15 @@ class GoToNNode(DTROS):
         self.go_south= self.go_matrix("south")
         self.go_west= self.go_matrix("west")
         self.go_nowhere = np.eye(self.matrix_shape[0]*self.matrix_shape[1])
+
         # Create direction possibilities
         self.directions = [self.go_north,self.go_east,self.go_west,self.go_south]
         self.direction_names = ["north","east","west","south"]
         self.direction_names_reversed = ["south","west","east","north"]
+
+        #initialize the published message
+        self.msg = None
+
         
         #Termination 1############################################################### ADD IN PARAMS
         self.all_termination_positions = []
@@ -418,27 +423,27 @@ class GoToNNode(DTROS):
             if self.node_matrix[row][column] > 6:
                 current_tile = self.node_matrix[row][column]
                 if previous_orientation ==  optimal_movements[cell]:
-                    movement_commands.append(2) #DONT TURN
+                    movement_commands.append(1) #DONT TURN
                 elif previous_orientation == 0 or previous_orientation == 3:
                     if abs(optimal_movements[cell]- previous_orientation) == 1:
-                        movement_commands.append(4) #RIGHT
+                        movement_commands.append(2) #RIGHT
                     if abs(optimal_movements[cell] - previous_orientation) == 2:
-                        movement_commands.append(3) #LEFT
+                        movement_commands.append(0) #LEFT
                 
                 elif previous_orientation == 1 or previous_orientation == 2:
                     if abs(optimal_movements[cell]- previous_orientation) == 2:
-                        movement_commands.append(4) #RIGHT
+                        movement_commands.append(2) #RIGHT
                     if abs(optimal_movements[cell] - previous_orientation) == 1:
-                        movement_commands.append(3) #LEFT
+                        movement_commands.append(0) #LEFT
 
             else:
-                movement_commands.append(1) #STRAIGHT
+                movement_commands.append(3) #STRAIGHT
 
             previous_orientation = optimal_movements[cell]
             cell = cell + transition_point
             row = int(math.floor(cell/self.matrix_shape[1]))
             column = int(cell - row*self.matrix_shape[1])
-        movement_commands.append(0) #STOP
+        movement_commands.append(4) #STOP
         return total_number_of_moments, movement_commands
 
     def find_compass_notation(self, deg):
@@ -550,14 +555,37 @@ class GoToNNode(DTROS):
                     all_bot_positions.append(duckie)
                     self.message_recieved = True
 
+        print(all_bot_positions)
         bot_ids = self.extract_bots(all_bot_positions)
         
         best_start_config = self.order_optimization(all_bot_positions, bot_ids)
         plan, total_moves_per_bot, way_points, duckiebot_id, total_moves = self.planner(best_start_config)
-        
-        print(duckiebot_id)
-        print(bot_ids)
+
+        """
+        #this is the code for one autobot ---> works!!
+        message = way_points
+        print("Message is:")
+        print(message)
+        print(way_points)
         print(plan)
+        #rate = rospy.Rate(10) # 10hz
+        pum_msg = Int32MultiArray()        
+        #print(pum_msg)
+        if not message:
+            print('Empty Message')
+        else:
+            self.msg = message
+            self.took_message=True
+        
+        
+            pum_msg = Int32MultiArray(data=self.msg)
+            #pum_msg = np.asarray(pum_msg)
+            self.command_publisher.publish(pum_msg)
+        """
+
+
+        #this is the code for multiple autobots; uncomment belew
+        
         for i in range(0, len(bot_ids)):
             bot_indx=duckiebot_id.index(bot_ids[i])
             print(bot_indx)
@@ -572,20 +600,7 @@ class GoToNNode(DTROS):
             pum_msg = Int32MultiArray(data=self.msg)
             self.command_publisher[i].publish(pum_msg)
         
-        '''
-        print(message)
-        #rate = rospy.Rate(10) # 10hz
-        pum_msg = Int32MultiArray()        
-        #print(pum_msg)
-        if not message:
-            print('Empty Message')
-        else:
-            self.msg = message
-        
-        
-        pum_msg = Int32MultiArray(data=self.msg)
-        self.command_publisher.publish(pum_msg)
-        '''
+    
             
 if __name__ == '__main__':
     # Initialize the node
