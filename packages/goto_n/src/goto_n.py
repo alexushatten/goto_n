@@ -19,11 +19,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 from duckietown_utils import load_map
 
 
-#To print whole array
-import sys
-np.set_printoptions(threshold=sys.maxsize)
-
-
 class GoToNNode(DTROS):
 
     def __init__(self, node_name):
@@ -37,7 +32,7 @@ class GoToNNode(DTROS):
         self.map_data = load_map(self.map_filename)
         self.map_matrix, self.matrix_shape, self.tile_size = self.extract_tile_matrix()
         self.node_matrix = self.encode_map_structure(self.map_matrix)
-        
+
         # Create movement_matrixes
         self.go_north= self.go_matrix("north")
         self.go_east= self.go_matrix("east")
@@ -52,47 +47,6 @@ class GoToNNode(DTROS):
 
         #initialize the published message
         self.msg = None
-
-        
-        #Termination 1############################################################### ADD IN PARAMS
-        self.all_termination_positions = []
-        termination_row_1 = 3
-        termination_column_1 = 1
-        termination_direction_1 = 2
-        termination_1 = [termination_row_1, termination_column_1, termination_direction_1]
-        self.all_termination_positions.append(termination_1)
-        #Termination 2
-        termination_row_2 = 3
-        termination_column_2 = 4
-        termination_direction_2 = 2
-        termination_2 = [termination_row_2, termination_column_2, termination_direction_2]
-        self.all_termination_positions.append(termination_2)
-        #Termination 3
-        termination_row_3 = 0
-        termination_column_3 = 1
-        termination_direction_3 = 1
-        termination_3 = [termination_row_3, termination_column_3, termination_direction_3]
-        self.all_termination_positions.append(termination_3)
-        #############################################################################################
-        all_bot_positions = []
-        bot_1_name = "bot1"
-        bot_row_1 = 4
-        bot_column_1 = 2
-        bot_direction_1 = 0
-        bot_1 = [bot_1_name, bot_row_1, bot_column_1, bot_direction_1]
-        all_bot_positions.append(bot_1)
-        bot_2_name = "bot2"
-        bot_row_2 = 5
-        bot_column_2 = 4
-        bot_direction_2 = 2
-        bot_2 = [bot_2_name, bot_row_2, bot_column_2, bot_direction_2]
-        all_bot_positions.append(bot_2)
-        bot_3_name = "bot3"
-        bot_row_3 = 1
-        bot_column_3 = 0
-        bot_direction_3 = 0
-        bot_3 = [bot_3_name, bot_row_3, bot_column_3, bot_direction_3]
-        all_bot_positions.append(bot_3)
 
         #Set up message process
         self.message_recieved = False
@@ -109,6 +63,13 @@ class GoToNNode(DTROS):
         # Initialize duckiebots 
         self.autobot_list = rospy.get_param('~duckiebots_list')
 
+        #Initialize termination positions  [Row, Column, Direction]
+        self.all_termination_positions = rospy.get_param('~termination_positions_list')
+        self.termination = self.extract_termination_tile()
+        self.both_termination_types = np.concatenate([self.termination, self.all_termination_positions], axis=1)
+        print(self.both_termination_types)
+        
+
         # Start Publisher for each duckiebot
         self.command_publisher=[]
         for autobot in self.autobot_list:
@@ -116,39 +77,22 @@ class GoToNNode(DTROS):
 
         self.proper_initialization()
 
-        print('----------------------------------------------------------------------------------')
-        print(self.autobot_list)
-
+        print('The Duckiebots given in the list are: {} \n'.format(self.autobot_list))
 
         # Check if the system is initialized properly
         self.request_watchtower_image()
-
-        '''
-        #TOBE DELETED ##########################
-        rate = rospy.Rate(10) # 10hz  
-        pum_msg=Int32MultiArray()        
-        while not rospy.is_shutdown():
-            message = [1,2,3,2,1,2,3,2,1]
-            pum_msg=Int32MultiArray(data=message)
-            self.command_publisher.publish(pum_msg)
-            rate.sleep()
-        #########################################
-        '''
-
-        print("initialized")
 
     def proper_initialization(self):
         number_of_termination_states = len(self.all_termination_positions)
         number_of_autobots = len(self.autobot_list)
 
         if number_of_autobots == number_of_termination_states:
-            print('There are an equal number of autobots and termination states. Starting Goto_n Node!')
+            print('\nThere are an equal number of autobots and termination states. Starting Goto_n Node! \n')
         
         elif number_of_termination_states > number_of_autobots:
-            print('Missing Autobots. Plese retry localization.')
-
+            print('\nMissing Autobots. Plese retry localization. \n')
         else: 
-            print('Please enter another Termination State')
+            print('\nPlease enter another Termination State \n')    
         
     def request_watchtower_image(self):
         msg_sended = Bool()
@@ -159,12 +103,9 @@ class GoToNNode(DTROS):
 
     def extract_bots(self, all_bot_positions):
         bot_ids = []
-        #bot_ids = re.findall("\d+",self.autobot_list)
-        #print("Autobots are")
         length = len(all_bot_positions)
         for i in range(0,length):
             bot = all_bot_positions[i][0]
-            #bot = int(re.search("\d+", bot).group(0))
             bot_ids.append(bot)
         return bot_ids
     
@@ -215,7 +156,7 @@ class GoToNNode(DTROS):
 
         return node_matrix
 
-    def find_current_tile(self,pose_x, pose_y):
+    def find_current_tile(self, pose_x, pose_y):
         number_of_rows = self.matrix_shape[0]
         number_of_columns = self.matrix_shape[1]
         #Change representation to crows and colunmns THIS IS MESSY
@@ -331,7 +272,7 @@ class GoToNNode(DTROS):
             neighbourcell = cell - 1
             cost_mat[neighbourcell,1] = float('inf')
         if termination_direction == 3:
-            neighbourcell = cell - self.matrix_shape[1] 
+            neighbourcell = cell + self.matrix_shape[1] 
             cost_mat[neighbourcell,0] = float('inf')
 
         #Add inf cost to direction oposite of startdirection in startcell of the currents bot position
@@ -464,7 +405,8 @@ class GoToNNode(DTROS):
         return compass
     
     def planner(self, bot_positions):
-        termination_positions = self.all_termination_positions
+        termination_positions = self.termination 
+        all_termination_positions = self.all_termination_positions    
         skip_termination = []
         changing_bot_positions = bot_positions
         bot_messages = []
@@ -523,85 +465,94 @@ class GoToNNode(DTROS):
         
         return best_configuration 
 
+    def extract_autobot_data(self, marker):
+        all_bot_positions = []
+        duckie = []
+        for bots in marker: 
+            if bots.ns == "duckiebots":
+                #Set duckiebots position and orientation
+                duckiebot_name = bots.id
+                duckiebot_x = bots.pose.position.x
+                duckiebot_y = bots.pose.position.y
+
+                duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
+
+                #print(duckiebot_x,duckiebot_y,duckiebot_orientation)
+
+                duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
+                
+                #Find duckiebots tile column and row
+                duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
+                
+                ################################DOLATER#############################################
+                #Find what type of tile robot is on
+                #current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
+
+                #Correct orientation, if robot is not facing any of the directions possible
+                ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
+                
+                duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
+                all_bot_positions.append(duckie)
+                self.message_recieved = True
+                print('Received Message from the Online Localization. Starting Planning Algorithm: \n')
+        
+        return all_bot_positions, duckie
+
+    def extract_termination_tile(self):
+        termination_positions = self.all_termination_positions
+        termination_tile_positions = []
+
+        
+
+        for termination_position in termination_positions:
+            pose_x = termination_position[0]
+            pose_y = termination_position[1]
+            orientation = termination_position[2]
+            termination_row, termination_column = self.find_current_tile(pose_x, pose_y)
+            termination_compass_notation = self.find_compass_notation (orientation)
+            termination = [termination_row, termination_column, termination_compass_notation]
+            termination_tile_positions.append(termination)
+        
+        print(termination_tile_positions)
+        return termination_tile_positions
+
+
 
     def callback(self, markerarray):
         marker = markerarray.markers
         all_bot_positions = []
         if self.message_recieved == False:
-            for bots in marker: 
-                if bots.ns == "duckiebots":
-                    #Set duckiebots position and orientation
-                    duckiebot_name = bots.id
-                    duckiebot_x = bots.pose.position.x
-                    duckiebot_y = bots.pose.position.y
+            #if does not work anymore, repaste the extract_autobot_data here (minus the return)
+            all_bot_positions, duckie = self.extract_autobot_data(marker)
 
-                    duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
-
-                    print(duckiebot_x,duckiebot_y,duckiebot_orientation)
-
-                    duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
-                    
-                    #Find duckiebots tile column and row
-                    duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
-                    
-                    ################################DOLATER#############################################
-                    #Find what type of tile robot is on
-                    #current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
-
-                    #Correct orientation, if robot is not facing any of the directions possible
-                    ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
-                    
-                    duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
-                    all_bot_positions.append(duckie)
-                    self.message_recieved = True
-
-        print(all_bot_positions)
+        #print('The starting Positions of all bots are: {}'.format(all_bot_positions))
         bot_ids = self.extract_bots(all_bot_positions)
+        #print(all_bot_positions)
+
+        #print(bot_ids)
         
         best_start_config = self.order_optimization(all_bot_positions, bot_ids)
         plan, total_moves_per_bot, way_points, duckiebot_id, total_moves = self.planner(best_start_config)
 
-        """
-        #this is the code for one autobot ---> works!!
-        message = way_points
-        print("Message is:")
-        print(message)
-        print(way_points)
-        print(plan)
-        #rate = rospy.Rate(10) # 10hz
-        pum_msg = Int32MultiArray()        
-        #print(pum_msg)
-        if not message:
-            print('Empty Message')
-        else:
-            self.msg = message
-            self.took_message=True
-        
-        
-            pum_msg = Int32MultiArray(data=self.msg)
-            #pum_msg = np.asarray(pum_msg)
-            self.command_publisher.publish(pum_msg)
-        """
-
-
-        #this is the code for multiple autobots; uncomment belew
-        
+        #this is the code for multiple autobot
         for i in range(0, len(bot_ids)):
             bot_indx=duckiebot_id.index(bot_ids[i])
-            print(bot_indx)
+            duckiebot = duckiebot_id[bot_indx]
             message = way_points[bot_indx]
-            pum_msg = Int32MultiArray()        
-
-            if not message:
+            pum_msg = Int32MultiArray()   
+            if self.message_recieved == False:
                 print('Empty Message')
             else:
                 self.msg = message
+                print('The starting Positions of all bots are: {} \n'.format(all_bot_positions))
+                print('The waypoint commands sent out to the duckiebot {} are {}. \n'.format(duckiebot, message))
+                print('Waypoint Commands sent out to the respective Duckiebots! \n')
             
+            rospy.sleep(1)
             pum_msg = Int32MultiArray(data=self.msg)
             self.command_publisher[i].publish(pum_msg)
-        
-    
-            
+
+     
 if __name__ == '__main__':
     # Initialize the node
     goto_node = GoToNNode(node_name='goto_n')

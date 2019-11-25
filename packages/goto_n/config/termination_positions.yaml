@@ -1,0 +1,8 @@
+termination_positions_list:
+- - 1.9 #X-Coordinate (m from the origin)
+  - 1.5 #Y-Coordinate (m from the origin)
+  - 270 #Pose in Degrees (north is 0)
+
+- - 2.5 #X-Coordinate (m from the origin)
+  - 0.3 #Y-Coordinate (m from the origin)
+  - 90 #Pose in Degrees (north is 0)

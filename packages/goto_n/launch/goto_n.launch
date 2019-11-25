@@ -1,9 +1,12 @@
 <launch>
   <arg name="watchtowers" default="watchtowers"/>
   <arg name="duckiebots" default="duckiebots"/>
+  <arg name="termination_positions" default="termination_positions"/>
 
   <node pkg="goto_n" type="goto_n.py" name="goto_n" output="screen">
     <rosparam command="load" file="$(find goto_n)/config/$(arg watchtowers).yaml"/>
     <rosparam command="load" file="$(find goto_n)/config/$(arg duckiebots).yaml"/>
+    <rosparam command="load" file="$(find goto_n)/config/$(arg termination_positions).yaml"/>
   </node>
+  <node pkg="goto_n" type="goto_n_compute_accuracy.py" name="goto_n_compute_accuracy" output="screen"/>
 </launch>
