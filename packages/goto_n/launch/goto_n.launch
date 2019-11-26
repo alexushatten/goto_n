@@ -8,5 +8,7 @@
     <rosparam command="load" file="$(find goto_n)/config/$(arg duckiebots).yaml"/>
     <rosparam command="load" file="$(find goto_n)/config/$(arg termination_positions).yaml"/>
   </node>
-  <node pkg="goto_n" type="goto_n_compute_accuracy.py" name="goto_n_compute_accuracy" output="screen"/>
+  <node pkg="goto_n" type="goto_n_compute_accuracy.py" name="goto_n_compute_accuracy" output="screen">
+    <rosparam command="load" file="$(find goto_n)/config/$(arg duckiebots).yaml"/>
+  </node>
 </launch>

@@ -43,22 +43,12 @@ class GoToNNode(DTROS):
         # Create direction possibilities
         self.directions = [self.go_north,self.go_east,self.go_west,self.go_south]
         self.direction_names = ["north","east","west","south"]
-        self.direction_names_reversed = ["south","west","east","north"]
 
         #initialize the published message
         self.msg = None
 
         #Set up message process
         self.message_recieved = False
-
-        #Start localization subscriber
-        self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
-
-        # Initialize watchtower request image message
-        self.watchtowers_list = rospy.get_param('~watchtowers_list')
-        self.image_request=[]
-        for watchtower in self.watchtowers_list:
-            self.image_request.append(rospy.Publisher('/'+watchtower+'/'+"requestImage",Bool,queue_size=1))
         
         # Initialize duckiebots 
         self.autobot_list = rospy.get_param('~duckiebots_list')
@@ -75,21 +65,27 @@ class GoToNNode(DTROS):
         for autobot in self.autobot_list:
             self.command_publisher.append(rospy.Publisher('/'+autobot+'/movement_commands', Int32MultiArray, queue_size=10))
 
+        #Ensure that the planner is correctly set up
         self.proper_initialization()
 
         print('The Duckiebots given in the list are: {} \n'.format(self.autobot_list))
 
-        # Check if the system is initialized properly
+        #Start localization subscriber
+        self.localization_subscriber = rospy.Subscriber("/cslam_markers", MarkerArray, self.callback)
+
+        # Initialize watchtower request image message
+        self.watchtowers_list = rospy.get_param('~watchtowers_list')
+        self.image_request=[]
+        for watchtower in self.watchtowers_list:
+            self.image_request.append(rospy.Publisher('/'+watchtower+'/'+"requestImage",Bool,queue_size=1))
+
+        # Request image from watchtower
         self.request_watchtower_image()
 
     def proper_initialization(self):
-        number_of_termination_states = len(self.all_termination_positions)
-        number_of_autobots = len(self.autobot_list)
-
-        if number_of_autobots == number_of_termination_states:
+        if len(self.autobot_list) == len(self.all_termination_positions):
             print('\nThere are an equal number of autobots and termination states. Starting Goto_n Node! \n')
-        
-        elif number_of_termination_states > number_of_autobots:
+        elif len(self.all_termination_positions) > len(self.autobot_list):
             print('\nMissing Autobots. Plese retry localization. \n')
         else: 
             print('\nPlease enter another Termination State \n')    
@@ -113,12 +109,8 @@ class GoToNNode(DTROS):
         tile_matrix = []
         for tile in self.map_data["tiles"]:
             tile_matrix.append(tile)
-        
         tile_matrix = np.array(tile_matrix)
-        autolab_matrix_shape = tile_matrix.shape
-
-        tile_size = self.map_data["tile_size"]
-        return tile_matrix, autolab_matrix_shape, tile_size
+        return tile_matrix, tile_matrix.shape, self.map_data["tile_size"]
 
     def encode_map_structure(self, tile_matrix):
         row = tile_matrix.shape[0]
@@ -414,6 +406,7 @@ class GoToNNode(DTROS):
         duckiebot_id = []
         total_moves = 0
         total_moves_per_bot = []
+        termination_tiles = []
 
         i = 0
         for current_bot in bot_positions:
@@ -432,19 +425,22 @@ class GoToNNode(DTROS):
             minimum_index = total_tiles_list.index(min(total_tiles_list))
             best_choice = different_movement_options[minimum_index]
             changing_bot_positions[i] = [current_bot[0]] + different_movement_options[minimum_index][2]
-            message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [termination_positions[minimum_index]]            
+            message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]]            
             skip_termination.append(termination_positions[minimum_index])
             bot_messages.append(message_to_robot)
             duckiebot_id.append(current_bot[0])
             way_points.append(best_choice[1])
+            termination_tiles.append(best_choice[2])
             total_moves_per_bot.append(total_tiles_list[minimum_index])
             total_moves = sum(total_moves_per_bot)
             i += 1
-        return bot_messages, total_moves_per_bot, way_points, duckiebot_id, total_moves
+        return bot_messages, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles
 
     def order_optimization(self, all_bot_positions, duckiebot_id):
 
         num_of_bots = len(duckiebot_id)
+        print('--------------------')
+        print(all_bot_positions)
         available_bot_config = all_bot_positions
         all_plans = []
         total_movements = []
@@ -453,7 +449,7 @@ class GoToNNode(DTROS):
         
         for combination in combinations:
             array = np.asarray(combination)
-            plan, total_moves_per_bot, way_points, duckiebot_id, total_moves  = self.planner(array)
+            plan, _, way_points, _, total_moves, _  = self.planner(array)
             total_movements.append(total_moves)
             all_plans.append(plan)
             way_point.append(way_points)
@@ -476,20 +472,10 @@ class GoToNNode(DTROS):
                 duckiebot_y = bots.pose.position.y
 
                 duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
-
-                #print(duckiebot_x,duckiebot_y,duckiebot_orientation)
-
                 duckie_compass_notation = self.find_compass_notation (duckiebot_orientation)
                 
                 #Find duckiebots tile column and row
                 duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
-                
-                ################################DOLATER#############################################
-                #Find what type of tile robot is on
-                #current_tile_type = self.determine_position_tile(duckiebot_row, duckiebot_column)
-
-                #Correct orientation, if robot is not facing any of the directions possible
-                ###################################### TODOLATER! self.orientation_correction(duckiebot_orientation,current_tile_type)
                 
                 duckie = [duckiebot_name, duckiebot_row, duckiebot_column, duckie_compass_notation]
                 all_bot_positions.append(duckie)
@@ -500,9 +486,7 @@ class GoToNNode(DTROS):
 
     def extract_termination_tile(self):
         termination_positions = self.all_termination_positions
-        termination_tile_positions = []
-
-        
+        termination_tile_positions = []        
 
         for termination_position in termination_positions:
             pose_x = termination_position[0]
@@ -532,13 +516,21 @@ class GoToNNode(DTROS):
         #print(bot_ids)
         
         best_start_config = self.order_optimization(all_bot_positions, bot_ids)
-        plan, total_moves_per_bot, way_points, duckiebot_id, total_moves = self.planner(best_start_config)
+        plan, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles = self.planner(best_start_config)
 
+        print('xxxxxx')
+        print(termination_tiles)
+        print(self.termination)
+        print(self.all_termination_positions)
+        print(self.both_termination_types)
+        print(plan)
+        print('xxxxxxxxxxxxxxx')     
         #this is the code for multiple autobot
         for i in range(0, len(bot_ids)):
             bot_indx=duckiebot_id.index(bot_ids[i])
             duckiebot = duckiebot_id[bot_indx]
             message = way_points[bot_indx]
+ 
             pum_msg = Int32MultiArray()   
             if self.message_recieved == False:
                 print('Empty Message')
