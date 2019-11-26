@@ -37,12 +37,24 @@ class GoToNAccuracy(DTROS):
         marker = msg.markers
         if self.termination_positions:
             for bots in marker: 
-                if bots.ns == "duckiebots":
-                    if float(bots.id) == 
-                        #Set duckiebots position and orientation
-                        duckiebot_name = bots.id
-                        duckiebot_x = bots.pose.position.x
-                        duckiebot_y = bots.pose.position.y
+                if bots.ns == "duckiebots": 
+                    for i in range(0,len(self.termination_positions)):
+                        if bots.id == int(self.termination_positions[i][0]):
+
+                            duckiebot_x = bots.pose.position.x
+                            duckiebot_y = bots.pose.position.y
+                            termination_x = self.termination_positions[i][1]
+                            termination_y = self.termination_positions[i][2]
+
+                            delta_x = abs(termination_x - duckiebot_x)
+                            delta_y = abs(termination_y - duckiebot_y)
+                            termination_message = [delta_x] + [delta_y]
+
+                            msg = Float32MultiArray()
+                            msg = Float32MultiArray(data=termination_message)
+                            self.command_publisher[i].publish(msg)
+                            print('Sent out termination message')
+
 
 
                
