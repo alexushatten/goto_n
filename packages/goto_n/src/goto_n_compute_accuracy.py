@@ -53,7 +53,7 @@ class GoToNAccuracy(DTROS):
                             msg = Float32MultiArray()
                             msg = Float32MultiArray(data=termination_message)
                             self.command_publisher[i].publish(msg)
-                            print('Sent out termination message')
+                            print('The delta x is: {}: the delta y is: {}'.format(delta_x, delta_y))
 
 
 
