@@ -1,3 +1,0 @@
-[console_scripts]
-dt-world-draw-maps = duckietown_world.svg_drawing:draw_maps_main
-

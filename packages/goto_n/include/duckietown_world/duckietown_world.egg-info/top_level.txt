@@ -1,2 +1,0 @@
-duckietown_world
-duckietown_world_tests
