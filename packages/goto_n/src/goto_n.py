@@ -43,9 +43,6 @@ class GoToNNode(DTROS):
 
         #Set up message process
         self.message_recieved = False
-        
-        # Initialize duckiebots 
-        self.autobot_list = rospy.get_param('~duckiebots_list')
 
         #Initialize termination positions  [Row, Column, Direction]
         self.all_termination_positions = rospy.get_param('~termination_positions_list')
@@ -61,9 +58,10 @@ class GoToNNode(DTROS):
         self.movement_cmd_pub=[]
         self.termination_commands = rospy.Publisher('/goto_n/termination_commands', Float32MultiArray, queue_size=10)
 
-
+        # Initialize duckiebots 
+        self.autobot_list = rospy.get_param('~duckiebots_list')
         for autobot in self.autobot_list:
-            self.movement_cmd_pub.append(rospy.Publisher('/'+autobot+'/movement_commands', Int32MultiArray, queue_size=10))
+            self.movement_cmd_pub.append(rospy.Publisher('/autobot{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
 
 
         # Start Publisher for termination location
@@ -486,18 +484,19 @@ class GoToNNode(DTROS):
             if bots.ns == "duckiebots":
                 #Set duckiebots position and orientation
                 duckiebot_id = bots.id
-                duckiebot_x = bots.pose.position.x
-                duckiebot_y = bots.pose.position.y
+                if duckiebot_id in self.autobot_list:
+                    duckiebot_x = bots.pose.position.x
+                    duckiebot_y = bots.pose.position.y
 
-                duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
-                duckie_compass_notation = self.find_compass_notation(duckiebot_orientation)
-                
-                #Find duckiebots tile column and row
-                duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
-                
-                all_bot_positions.append([duckiebot_id, duckiebot_row, duckiebot_column, duckie_compass_notation])
-                bot_ids.append(duckiebot_id)
-                self.message_recieved = True
+                    duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
+                    duckie_compass_notation = self.find_compass_notation(duckiebot_orientation)
+                    
+                    #Find duckiebots tile column and row
+                    duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
+                    
+                    all_bot_positions.append([duckiebot_id, duckiebot_row, duckiebot_column, duckie_compass_notation])
+                    bot_ids.append(duckiebot_id)
+                    self.message_recieved = True
         
         return all_bot_positions, bot_ids
 

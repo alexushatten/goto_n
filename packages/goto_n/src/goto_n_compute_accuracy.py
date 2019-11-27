@@ -26,7 +26,7 @@ class GoToNAccuracy(DTROS):
         self.command_publisher=[]
         self.autobot_list = rospy.get_param('~duckiebots_list')
         for autobot in self.autobot_list:
-            self.command_publisher.append(rospy.Publisher('/'+autobot+'/positional_diff', Float32MultiArray, queue_size=10))
+            self.command_publisher.append(rospy.Publisher('/autobot{}/positional_diff'.format(autobot), Float32MultiArray, queue_size=10))
 
         print("Accuracy node initalized")
 
@@ -53,7 +53,7 @@ class GoToNAccuracy(DTROS):
                             msg = Float32MultiArray()
                             msg = Float32MultiArray(data=termination_message)
                             self.command_publisher[i].publish(msg)
-                            print('The delta x is: {}: the delta y is: {}'.format(delta_x, delta_y))
+                            print('FOR autobot{}: The delta x is: {}: the delta y is: {}\n'.format(bots.id,delta_x, delta_y))
 
 
 
