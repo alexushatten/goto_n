@@ -19,6 +19,10 @@ from duckietown_msgs.msg import WheelsCmdStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from duckietown_utils import load_map
 
+import sys
+import numpy
+numpy.set_printoptions(threshold=sys.maxsize)
+
 
 class GoToNNode(DTROS):
 
@@ -32,23 +36,24 @@ class GoToNNode(DTROS):
         self.map_filename = '/code/catkin_ws/src/goto_n/packages/goto_n/maps/{}.yaml'.format(self.map_name)
         self.map_data = load_map(self.map_filename)
         self.map_matrix, self.matrix_shape, self.tile_size = self.extract_tile_matrix()
-        self.node_matrix = self.encode_map_structure(self.map_matrix)
+        small_node_matrix = self.encode_map_structure(self.map_matrix)
+        self.node_matrix = self.extend_matrix(small_node_matrix)
 
         # Create movement_matrixes
+
+       
+        self.transition_matrix=self.transition_function()
         self.go_north= self.go_matrix("north")
         self.go_east= self.go_matrix("east")
         self.go_south= self.go_matrix("south")
         self.go_west= self.go_matrix("west")
-        self.go_nowhere = np.eye(self.matrix_shape[0]*self.matrix_shape[1])
-
+        self.go_nowhere = np.eye(2*self.matrix_shape[0]*2*self.matrix_shape[1])
         #Set up message process
         self.message_recieved = False
 
         #Initialize termination positions  [Row, Column, Direction]
         self.all_termination_positions = rospy.get_param('~termination_positions_list')
         self.termination = self.extract_termination_tile()
-        
-
         self.all_termination_positions_array = np.array(self.all_termination_positions)
         self.termination_array = np.array(self.termination)
         self.termination_match_array=np.concatenate((self.termination_array,self.all_termination_positions_array),axis=1)
@@ -108,7 +113,23 @@ class GoToNNode(DTROS):
             bot = all_bot_positions[i][0]
             bot_ids.append(bot)
         return bot_ids
-    
+
+    def transition_function(self):
+        north= -2*self.matrix_shape[1]
+        south= 2*self.matrix_shape[1]
+        west=-1
+        east=1
+        #each column is from 0 to 20    
+        #each row is 0=north 1=east 2=west 3=south
+        transition_matrix=[\
+        [0, north,  0,   0,   0,   0,  2*north+east, 2*north,     0,     north,   2*north,  0,           0,     0,             0,       north, 2*north+east,  0,       north,   2*north+east, 2*north ],\
+        [0,   0,    0,  east, 0,   0,     0,           0,    south+2*east, 0,       east,   0,        2*east,  east,      south+2*east,   0,      2*east, south+2*east,  0,       2*east,      east],\
+        [0,   0,    0,   0, west, west,   0,     north+2*west,    0,       0,         0,  2*west,        0,  north+2*west,   west,     2*west,       0,       west,    2*west,       0,      north+2*west],\
+        [0,   0,  south, 0,   0, 2*south,south,        0,      2*south, 2*south+west, 0, 2*south+west, south,   0,              0,        0,         0,      2*south, 2*south+west, south,      0],\
+        [0,   0,    0,   0,   0,   0,     0,           0,          0,      0,         0,     0,          0,     0,              0,        0,         0,        0,         0,          0,        0]]
+        
+        return transition_matrix
+
     def extract_tile_matrix(self):
         tile_matrix = []
         for tile in self.map_data["tiles"]:
@@ -119,7 +140,6 @@ class GoToNNode(DTROS):
     def encode_map_structure(self, tile_matrix):
         row = tile_matrix.shape[0]
         column = tile_matrix.shape[1]
-        #print(tile_matrix)
 
         node_matrix = np.zeros((self.matrix_shape[0],self.matrix_shape[1]))
         for i in range(0, row):
@@ -153,17 +173,17 @@ class GoToNNode(DTROS):
         return node_matrix
 
     def find_current_tile(self, pose_x, pose_y):
-        number_of_rows = self.matrix_shape[0]
-        number_of_columns = self.matrix_shape[1]
+        number_of_rows = 2*self.matrix_shape[0]
+        number_of_columns = 2*self.matrix_shape[1]
         #Get the column
-        tile_column = int(round((self.tile_size/2) + pose_x/self.tile_size) - 1)
+        tile_column = int(round(((self.tile_size/4) + 2*pose_x/self.tile_size) - 1))
         if tile_column < 0:
             tile_column = 0
         if tile_column > number_of_columns - 1:
             tile_column = number_of_columns - 1
 
         #Get the row
-        tile_row = int((number_of_rows - 1) - round((self.tile_size/2) + pose_y/self.tile_size - 1))
+        tile_row = int((number_of_rows - 1) - round(((self.tile_size/4) + 2*pose_y/self.tile_size - 1)))
         if tile_row < 0:
             tile_row = 0
         elif tile_row > number_of_rows - 1:
@@ -211,36 +231,54 @@ class GoToNNode(DTROS):
         return current_tile_type
 
     def go_matrix(self,direction):
-        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
         movement_matrix = np.zeros((matrix_size,matrix_size))
         nodes = np.array(self.node_matrix).flatten()
-        transition_point = 0
-
-        #Direction of movement init
-        if direction == "north":
-            valid_nodes = [1,4,6,7,8,10,11]
-            transition_point = -self.matrix_shape[1]
-        elif direction == "east":
-            valid_nodes = [2,4,5,8,9,10,11]
-            transition_point = 1
-        elif direction == "south":
-            valid_nodes = [1,3,5,7,8,9,11]
-            transition_point = self.matrix_shape[1]
-        elif direction == "west":
-            valid_nodes = [2,3,6,7,9,10,11]
-            transition_point = -1
-        else:
-            print("unknown direction choise")
-
-        #Create movemet matrix
+        if direction =="north":j=0
+        elif direction =="east":j=1
+        elif direction =="west":j=2
+        else: j=3
         for i in range(0,matrix_size):
-            for y in valid_nodes: 
-                if nodes[i] == y:
-                    movement_matrix[i,i + transition_point] = 1
+            transition_point=self.transition_matrix[j][nodes[i]]
+            if transition_point != 0:
+                movement_matrix[i,i+transition_point] = 1                        
         return movement_matrix
 
+
+    def extend_matrix(self, node_matrix):
+        extended_matrix=np.zeros((2*self.matrix_shape[0],2*self.matrix_shape[1]))
+        for i in range(0,self.matrix_shape[0]):
+            for j in range(0, self.matrix_shape[1]):
+                if node_matrix[i][j] == 1:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[2,1],[2,1]]
+                elif node_matrix[i][j] == 2:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[4, 4],[3, 3]]
+                elif node_matrix[i][j] == 3:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[4, 4],[2, 1]]
+                elif node_matrix[i][j] == 4:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[2, 1],[3, 3]]
+                elif node_matrix[i][j] == 5:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[2, 4],[2, 3]]
+                elif node_matrix[i][j] == 6:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[4, 1],[3, 1]]
+                elif node_matrix[i][j] == 7:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[5, 0],[6, 7]]
+                elif node_matrix[i][j] == 8:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[8, 9],[0, 10]]
+                elif node_matrix[i][j] == 9:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[0, 11],[12, 13]]
+                elif node_matrix[i][j] == 10:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[14, 15],[16, 0]]
+                elif node_matrix[i][j] == 11:
+                    extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[17, 18],[19, 20]]
+                                   
+        return extended_matrix.astype(int)
+
+        
+
+
     def cost_matrix(self, termination_point, all_bot_positions, current_bot_position):
-        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
         cost_mat=np.matmul(self.go_north,np.ones((matrix_size,1)))
         cost_mat=np.append(cost_mat,np.matmul(self.go_east,np.ones((matrix_size,1))),1)
         cost_mat=np.append(cost_mat,np.matmul(self.go_west,np.ones((matrix_size,1))),1)
@@ -252,42 +290,12 @@ class GoToNNode(DTROS):
         termination_row = termination_point[0]
         termination_column = termination_point[1]
         termination_direction = termination_point[2]
-
         #Add 0 cost to desired location
-        cell = termination_row*self.matrix_shape[1] + termination_column
+        cell = termination_row*2*self.matrix_shape[1] + termination_column
         cost_mat[cell,4]=0
-        
 
-        #Add inf cost to direction oposite of enddirection in the cell next to it
-        if termination_direction == 0:
-            neighbourcell = cell - self.matrix_shape[1] 
-            cost_mat[neighbourcell,3] = float('inf')
-        if termination_direction == 1:
-            neighbourcell = cell + 1
-            cost_mat[neighbourcell,2] = float('inf')
-        if termination_direction == 2:
-            neighbourcell = cell - 1
-            cost_mat[neighbourcell,1] = float('inf')
-        if termination_direction == 3:
-            neighbourcell = cell + self.matrix_shape[1] 
-            cost_mat[neighbourcell,0] = float('inf')
 
-        #Add inf cost to direction oposite of startdirection in startcell of the currents bot position
         current_name = current_bot_position[0]
-        current_init_row = current_bot_position[1]
-        current_init_column = current_bot_position[2]
-        current_init_direction = current_bot_position[3]
-        start_cell = current_init_row*self.matrix_shape[1] + current_init_column
-
-        if current_init_direction == 0:
-            cost_mat[start_cell,3] = float('inf')
-        if current_init_direction == 1:
-            cost_mat[start_cell,2] = float('inf')
-        if current_init_direction == 2:
-            cost_mat[start_cell,1] = float('inf')
-        if current_init_direction == 3:
-            cost_mat[start_cell,0] = float('inf')
-
         for other_bot_position in all_bot_positions:
 
             other_name = other_bot_position[0]
@@ -299,14 +307,17 @@ class GoToNNode(DTROS):
             other_init_column = other_bot_position[2]
             other_init_direction = other_bot_position[3]
 
-            other_cell = other_init_row*self.matrix_shape[1] + other_init_column
+            other_cell = other_init_row*2*self.matrix_shape[1] + other_init_column
             
             cost_mat[other_cell,other_init_direction] = float('inf')
+
+
+
 
         return cost_mat
 
     def value_iteration(self, cost_mat):
-        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
         V_matrix = np.zeros((matrix_size,1))
         V_new_matrix = np.zeros((matrix_size,1))
         I_matrix =np.zeros((matrix_size,1))
@@ -328,7 +339,7 @@ class GoToNNode(DTROS):
                 V_new_matrix[i]=np.amin(V_amound_of_inputs)
                 I_matrix[i]=np.argmin(V_amound_of_inputs)
             V_matrix=V_new_matrix
-            if iteration_value==matrix_size:
+            if iteration_value==60:
                 iterate = False
         Optimal_movements=I_matrix
         Number_Of_Movements=V_matrix
@@ -341,46 +352,114 @@ class GoToNNode(DTROS):
         row = bot_position_and_orientation[1]
         column = bot_position_and_orientation[2]
         orientation = bot_position_and_orientation[3]
-        
-        cell = row*self.matrix_shape[1] + column
+
+
+        cell = row*2*self.matrix_shape[1] + column
         movement_commands = []
         current_orientation = orientation
         previous_orientation = orientation
         total_number_of_moments = int(number_of_movements[cell])
         for i in range (0, total_number_of_moments):
-            compass_movement = optimal_movements[cell]
-            if compass_movement == 0:
-                transition_point = -self.matrix_shape[1]
-            elif compass_movement == 1:
-                transition_point = 1
-            elif compass_movement == 3:
-                transition_point = self.matrix_shape[1]
-            elif compass_movement == 2:
-                transition_point = -1
             
-            if self.node_matrix[row][column] > 6:
-                current_tile = self.node_matrix[row][column]
-                if previous_orientation ==  optimal_movements[cell]:
-                    movement_commands.append(1) #DONT TURN
-                elif previous_orientation == 0 or previous_orientation == 3:
-                    if abs(optimal_movements[cell]- previous_orientation) == 1:
-                        movement_commands.append(2) #RIGHT
-                    if abs(optimal_movements[cell] - previous_orientation) == 2:
-                        movement_commands.append(0) #LEFT
-                
-                elif previous_orientation == 1 or previous_orientation == 2:
-                    if abs(optimal_movements[cell]- previous_orientation) == 2:
-                        movement_commands.append(2) #RIGHT
-                    if abs(optimal_movements[cell] - previous_orientation) == 1:
-                        movement_commands.append(0) #LEFT
+            best_option = optimal_movements[cell][0].astype(int)
+            tiletype = self.node_matrix[row][column]
+            transition_point= self.transition_matrix[best_option][tiletype]
+            
 
-            else:
-                movement_commands.append(3) #STRAIGHT
+            if self.node_matrix[row][column] == 5:
+                if optimal_movements[cell] == 2 :
+                    movement_commands.append(2) # RIGHT
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(1) #DONT TURN
+            elif self.node_matrix[row][column] == 6:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(0) #LEFT
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(2) #RIGHT
+            elif self.node_matrix[row][column] == 7:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(1) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(0) #LEFT
+            elif self.node_matrix[row][column] == 8:
+                if optimal_movements[cell] == 1 :
+                    movement_commands.append(0) #DONT TURN
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(1) #LEFT
+            elif self.node_matrix[row][column] == 9:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(2) #DONT TURN
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(0) #LEFT
+            elif self.node_matrix[row][column] == 10:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(1) #DONT TURN
+                elif optimal_movements[cell] == 1 :
+                    movement_commands.append(2) #LEFT
+            elif self.node_matrix[row][column] == 11:
+                if optimal_movements[cell] == 2 :
+                    movement_commands.append(1) #DONT TURN
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(0) #LEFT
+            elif self.node_matrix[row][column] == 12:
+                if optimal_movements[cell] == 1 :
+                    movement_commands.append(1) #DONT TURN
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(2) #RIGHT
+            elif self.node_matrix[row][column] == 13:
+                if optimal_movements[cell] == 1 :
+                    movement_commands.append(2) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(0) #RIGHT
+            elif self.node_matrix[row][column] == 14:
+                if optimal_movements[cell] == 1 :
+                    movement_commands.append(0) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(2) #RIGHT
+            elif self.node_matrix[row][column] == 15:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(2) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(1) #RIGHT
+            elif self.node_matrix[row][column] == 16:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(0) #DONT TURN
+                elif optimal_movements[cell] == 1 :
+                    movement_commands.append(1) #RIGHT
+            elif self.node_matrix[row][column] == 17:
+                if optimal_movements[cell] == 1 :
+                    movement_commands.append(0) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(2) #RIGHT
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(1) #STRAIGHT
+            elif self.node_matrix[row][column] == 18:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(2) #DONT TURN
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(1) #RIGHT
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(0) #STRAIGHT
+            elif self.node_matrix[row][column] == 19:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(0) #DONT TURN
+                elif optimal_movements[cell] == 1 :
+                    movement_commands.append(1) #RIGHT
+                elif optimal_movements[cell] == 3 :
+                    movement_commands.append(2) #RIGHT
+            elif self.node_matrix[row][column] == 20:
+                if optimal_movements[cell] == 0 :
+                    movement_commands.append(1) #DONT TURN
+                elif optimal_movements[cell] == 1 :
+                    movement_commands.append(2) #RIGHT
+                elif optimal_movements[cell] == 2 :
+                    movement_commands.append(0) #RIGHT
+
 
             previous_orientation = optimal_movements[cell]
             cell = cell + transition_point
-            row = int(math.floor(cell/self.matrix_shape[1]))
-            column = int(cell - row*self.matrix_shape[1])
+            row = int(math.floor(cell/(2*self.matrix_shape[1])))
+            column = int(cell - row*2*self.matrix_shape[1])
         movement_commands.append(4) #STOP
         return total_number_of_moments, movement_commands
 
@@ -428,12 +507,16 @@ class GoToNNode(DTROS):
             #Which termination_point it will end op on
             for termination_point in termination_positions:
                 if termination_point in skip_termination:
+                    total_tiles_list.append(1000)
+                    different_movement_options.append ([1000] + [1000] + [termination_point])
                     continue
-                cost_mat = self.cost_matrix(termination_point, changing_bot_positions, current_bot)
-                optimal_movements , number_of_movements = self.value_iteration(cost_mat)
-                total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, optimal_movements, number_of_movements)
-                different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
-                total_tiles_list.append(total_tiles_to_move)
+                else:
+                    cost_mat = self.cost_matrix(termination_point, changing_bot_positions, current_bot)
+
+                    optimal_movements , number_of_movements = self.value_iteration(cost_mat)
+                    total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, optimal_movements, number_of_movements)
+                    different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
+                    total_tiles_list.append(total_tiles_to_move)
 
             minimum_index = total_tiles_list.index(min(total_tiles_list))
             best_choice = different_movement_options[minimum_index]
@@ -445,6 +528,7 @@ class GoToNNode(DTROS):
             message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [exact_termination]
 
             skip_termination.append(termination_positions[minimum_index])
+            print(skip_termination)
             bot_messages.append(message_to_robot)
             duckiebot_id.append(current_bot[0])
             way_points.append(best_choice[1])
@@ -487,7 +571,8 @@ class GoToNNode(DTROS):
                 if duckiebot_id in self.autobot_list:
                     duckiebot_x = bots.pose.position.x
                     duckiebot_y = bots.pose.position.y
-
+                    print(duckiebot_x)
+                    print(duckiebot_y)
                     duckiebot_orientation= self.quat_to_compass(bots.pose.orientation)
                     duckie_compass_notation = self.find_compass_notation(duckiebot_orientation)
                     
