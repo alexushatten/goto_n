@@ -160,7 +160,7 @@ class GoToNNode(DTROS):
 
         return node_matrix
 
-    def find_current_tile(self, pose_x, pose_y):
+    def find_current_tile(self, pose_x, pose_y, orientation):
         number_of_rows = 2*self.matrix_shape[0]
         number_of_columns = 2*self.matrix_shape[1]
         #Get the column
@@ -176,6 +176,65 @@ class GoToNNode(DTROS):
             tile_row = 0
         elif tile_row > number_of_rows - 1:
             tile_row = number_of_rows - 1
+        current_tyle_type=self.determine_position_tile( tile_row, tile_column)
+        next_column = int(round(((self.tile_size/4) + 2*pose_x/self.tile_size)))
+        previous_column = int(round(((self.tile_size/4) + 2*pose_x/self.tile_size-2)))
+        next_row = int(number_of_rows - round(((self.tile_size/4) + 2*pose_y/self.tile_size - 1)))
+        previous_row = int(number_of_rows -2 - round(((self.tile_size/4) + 2*pose_y/self.tile_size - 1)))
+        if previous_column < 0:
+            western_tyle_type= - 1
+        else:
+            western_tyle_type=self.determine_position_tile( tile_row, previous_column)
+        if previous_row < 0:
+            northern_tyle_type= - 1
+        else:
+            northern_tyle_type=self.determine_position_tile( previous_row, tile_column)
+        if next_row > number_of_rows - 1:
+            southern_tyle_type= - 1
+        else:
+            southern_tyle_type=self.determine_position_tile( next_row, tile_column)
+        if next_column > number_of_columns - 1:
+            eastern_tyle_type = - 1
+        else:
+            eastern_tyle_type=self.determine_position_tile( tile_row, next_column)
+
+        if current_tyle_type < 5:
+            if orientation == 0 and current_tyle_type != 1:
+                if western_tyle_type == 1:
+                    tile_column=previous_column
+                elif eastern_tyle_type == 1:
+                    tile_column=next_column
+                elif northern_tyle_type == 1:
+                    tile_row=previous_row
+                elif southern_tyle_type == 1:
+                    tile_row=next_row
+            elif orientation == 1 and current_tyle_type != 3:
+                if northern_tyle_type == 3:
+                    tile_row=previous_row
+                elif southern_tyle_type == 3:
+                    tile_row=next_row
+                elif western_tyle_type == 3:
+                    tile_column=previous_column
+                elif eastern_tyle_type == 3:
+                    tile_column=next_column
+            elif orientation == 2 and current_tyle_type != 4:
+                if northern_tyle_type == 4:
+                    tile_row=previous_row
+                elif southern_tyle_type == 4:
+                    tile_row=next_row
+                elif western_tyle_type == 4:
+                    tile_column=previous_column
+                elif eastern_tyle_type == 4:
+                    tile_column=next_column
+            elif orientation == 3 and current_tyle_type != 2:
+                if western_tyle_type == 2:
+                    tile_column=previous_column
+                elif eastern_tyle_type == 2:
+                    tile_column=next_column
+                elif northern_tyle_type == 2:
+                    tile_row=previous_row
+                elif southern_tyle_type == 2:
+                    tile_row=next_row
         return tile_row, tile_column
     
     def quat_to_compass(self, q):
@@ -246,39 +305,6 @@ class GoToNNode(DTROS):
                     extended_matrix[i*2:i*2+2,j*2:j*2+2]=[[17, 18],[19, 20]]
                                    
         return extended_matrix.astype(int)
-
-    """
-    def value_iteration(self, cost_mat):
-        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
-        V_matrix = np.zeros((matrix_size,1))
-        V_new_matrix = np.zeros((matrix_size,1))
-        I_matrix =np.zeros((matrix_size,1))
-        V_temporary_matrix=100*np.ones((matrix_size,1))
-        V_amound_of_inputs=np.zeros((5,1))
-        iteration_value=0
-        all_movements_matrix = np.append(self.go_north, self.go_east, 1)
-        all_movements_matrix = np.append(all_movements_matrix, self.go_west, 1)
-        all_movements_matrix = np.append(all_movements_matrix, self.go_south, 1)
-        all_movements_matrix = np.append(all_movements_matrix, self.go_nowhere, 1)
-        iterate = True
-        while iterate == True:
-            iteration_value+=1
-            V_temporary_matrix=V_matrix
-            for i in range(0, matrix_size):
-                for k in range(0,5):
-                    Matrix_for_all_Commands=np.matmul(all_movements_matrix[:,matrix_size*k:matrix_size*(k+1)],V_matrix)
-                    V_amound_of_inputs[k]=cost_mat[i,k] + Matrix_for_all_Commands[i]
-                V_new_matrix[i]=np.amin(V_amound_of_inputs)
-                I_matrix[i]=np.argmin(V_amound_of_inputs)
-            V_matrix=V_new_matrix
-            if iteration_value==60:
-                iterate = False
-        Optimal_movements=I_matrix
-        Number_Of_Movements=V_matrix
-        Number_Of_Movements[Number_Of_Movements > 1000]=float('inf')
-
-        return Optimal_movements , Number_Of_Movements.astype(int)
-        """
 
     def find_robot_commands(self, bot_position_and_orientation, optimal_movements, number_of_movements):
         name = bot_position_and_orientation[0]
@@ -445,7 +471,6 @@ class GoToNNode(DTROS):
                     continue
                 else:
                     cost_mat = cost_matrix(self.matrix_shape, self.go_north, self.go_east, self.go_west, self.go_south, self.go_nowhere,termination_point, changing_bot_positions, current_bot)
-
                     optimal_movements , number_of_movements = value_iteration(self.matrix_shape, self.go_north, self.go_east, self.go_west, self.go_south, self.go_nowhere,cost_mat)
                     total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, optimal_movements, number_of_movements)
                     different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
@@ -510,7 +535,7 @@ class GoToNNode(DTROS):
                     duckie_compass_notation = self.find_compass_notation(duckiebot_orientation)
                     
                     #Find duckiebots tile column and row
-                    duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y)
+                    duckiebot_row, duckiebot_column = self.find_current_tile(duckiebot_x, duckiebot_y,duckie_compass_notation)
                     
                     all_bot_positions.append([duckiebot_id, duckiebot_row, duckiebot_column, duckie_compass_notation])
                     bot_ids.append(duckiebot_id)
@@ -526,8 +551,8 @@ class GoToNNode(DTROS):
             pose_x = termination_position[0]
             pose_y = termination_position[1]
             orientation = termination_position[2]
-            termination_row, termination_column = self.find_current_tile(pose_x, pose_y)
             termination_compass_notation = self.find_compass_notation (orientation)
+            termination_row, termination_column = self.find_current_tile(pose_x, pose_y, termination_compass_notation)
             termination = [termination_row, termination_column, termination_compass_notation]
             termination_tile_positions.append(termination)
 
