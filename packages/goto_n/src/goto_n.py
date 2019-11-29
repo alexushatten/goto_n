@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import cv2
 import numpy as np
 import os
@@ -23,6 +22,11 @@ import sys
 import numpy
 numpy.set_printoptions(threshold=sys.maxsize)
 
+#NEW FUNCTIONS
+from goto_n_transition_matrix import transition_function
+from goto_n_value_iteration import go_matrix ,cost_matrix, value_iteration
+
+
 
 class GoToNNode(DTROS):
 
@@ -42,11 +46,11 @@ class GoToNNode(DTROS):
         # Create movement_matrixes
 
        
-        self.transition_matrix=self.transition_function()
-        self.go_north= self.go_matrix("north")
-        self.go_east= self.go_matrix("east")
-        self.go_south= self.go_matrix("south")
-        self.go_west= self.go_matrix("west")
+        self.transition_matrix=transition_function(self.matrix_shape)
+        self.go_north=go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"north")
+        self.go_east= go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"east")
+        self.go_south=go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"south")
+        self.go_west= go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"west")
         self.go_nowhere = np.eye(2*self.matrix_shape[0]*2*self.matrix_shape[1])
         #Set up message process
         self.message_recieved = False
@@ -113,23 +117,7 @@ class GoToNNode(DTROS):
             bot = all_bot_positions[i][0]
             bot_ids.append(bot)
         return bot_ids
-
-    def transition_function(self):
-        north= -2*self.matrix_shape[1]
-        south= 2*self.matrix_shape[1]
-        west=-1
-        east=1
-        #each column is from 0 to 20    
-        #each row is 0=north 1=east 2=west 3=south
-        transition_matrix=[\
-        [0, north,  0,   0,   0,   0,  2*north+east, 2*north,     0,     north,   2*north,  0,           0,     0,             0,       north, 2*north+east,  0,       north,   2*north+east, 2*north ],\
-        [0,   0,    0,  east, 0,   0,     0,           0,    south+2*east, 0,       east,   0,        2*east,  east,      south+2*east,   0,      2*east, south+2*east,  0,       2*east,      east],\
-        [0,   0,    0,   0, west, west,   0,     north+2*west,    0,       0,         0,  2*west,        0,  north+2*west,   west,     2*west,       0,       west,    2*west,       0,      north+2*west],\
-        [0,   0,  south, 0,   0, 2*south,south,        0,      2*south, 2*south+west, 0, 2*south+west, south,   0,              0,        0,         0,      2*south, 2*south+west, south,      0],\
-        [0,   0,    0,   0,   0,   0,     0,           0,          0,      0,         0,     0,          0,     0,              0,        0,         0,        0,         0,          0,        0]]
-        
-        return transition_matrix
-
+ 
     def extract_tile_matrix(self):
         tile_matrix = []
         for tile in self.map_data["tiles"]:
@@ -230,21 +218,6 @@ class GoToNNode(DTROS):
         current_tile_type = self.node_matrix[pose_row, pose_column]
         return current_tile_type
 
-    def go_matrix(self,direction):
-        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
-        movement_matrix = np.zeros((matrix_size,matrix_size))
-        nodes = np.array(self.node_matrix).flatten()
-        if direction =="north":j=0
-        elif direction =="east":j=1
-        elif direction =="west":j=2
-        else: j=3
-        for i in range(0,matrix_size):
-            transition_point=self.transition_matrix[j][nodes[i]]
-            if transition_point != 0:
-                movement_matrix[i,i+transition_point] = 1                        
-        return movement_matrix
-
-
     def extend_matrix(self, node_matrix):
         extended_matrix=np.zeros((2*self.matrix_shape[0],2*self.matrix_shape[1]))
         for i in range(0,self.matrix_shape[0]):
@@ -274,48 +247,7 @@ class GoToNNode(DTROS):
                                    
         return extended_matrix.astype(int)
 
-        
-
-
-    def cost_matrix(self, termination_point, all_bot_positions, current_bot_position):
-        matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
-        cost_mat=np.matmul(self.go_north,np.ones((matrix_size,1)))
-        cost_mat=np.append(cost_mat,np.matmul(self.go_east,np.ones((matrix_size,1))),1)
-        cost_mat=np.append(cost_mat,np.matmul(self.go_west,np.ones((matrix_size,1))),1)
-        cost_mat=np.append(cost_mat,np.matmul(self.go_south,np.ones((matrix_size,1))),1)
-        cost_mat=np.append(cost_mat,np.matmul(self.go_nowhere,1000*np.ones((matrix_size,1))),1)
-        cost_mat[cost_mat < 0.1]=float('inf')
-
-        #Add termination_point
-        termination_row = termination_point[0]
-        termination_column = termination_point[1]
-        termination_direction = termination_point[2]
-        #Add 0 cost to desired location
-        cell = termination_row*2*self.matrix_shape[1] + termination_column
-        cost_mat[cell,4]=0
-
-
-        current_name = current_bot_position[0]
-        for other_bot_position in all_bot_positions:
-
-            other_name = other_bot_position[0]
-            #Skip the bot you are currently calculating the map for
-            if other_name == current_name:
-                continue
-
-            other_init_row = other_bot_position[1]
-            other_init_column = other_bot_position[2]
-            other_init_direction = other_bot_position[3]
-
-            other_cell = other_init_row*2*self.matrix_shape[1] + other_init_column
-            
-            cost_mat[other_cell,other_init_direction] = float('inf')
-
-
-
-
-        return cost_mat
-
+    """
     def value_iteration(self, cost_mat):
         matrix_size = 2*self.matrix_shape[0]*2*self.matrix_shape[1]
         V_matrix = np.zeros((matrix_size,1))
@@ -346,6 +278,7 @@ class GoToNNode(DTROS):
         Number_Of_Movements[Number_Of_Movements > 1000]=float('inf')
 
         return Optimal_movements , Number_Of_Movements.astype(int)
+        """
 
     def find_robot_commands(self, bot_position_and_orientation, optimal_movements, number_of_movements):
         name = bot_position_and_orientation[0]
@@ -511,9 +444,9 @@ class GoToNNode(DTROS):
                     different_movement_options.append ([1000] + [1000] + [termination_point])
                     continue
                 else:
-                    cost_mat = self.cost_matrix(termination_point, changing_bot_positions, current_bot)
+                    cost_mat = cost_matrix(self.matrix_shape, self.go_north, self.go_east, self.go_west, self.go_south, self.go_nowhere,termination_point, changing_bot_positions, current_bot)
 
-                    optimal_movements , number_of_movements = self.value_iteration(cost_mat)
+                    optimal_movements , number_of_movements = value_iteration(self.matrix_shape, self.go_north, self.go_east, self.go_west, self.go_south, self.go_nowhere,cost_mat)
                     total_tiles_to_move, movememt_commands = self.find_robot_commands(current_bot, optimal_movements, number_of_movements)
                     different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
                     total_tiles_list.append(total_tiles_to_move)
