@@ -53,7 +53,6 @@ class GoToNAccuracy(DTROS):
                             msg = Float32MultiArray()
                             msg = Float32MultiArray(data=termination_message)
                             self.command_publisher[i].publish(msg)
-                            print('FOR autobot{}: The delta x is: {}: the delta y is: {}\n'.format(bots.id,delta_x, delta_y))
 
 
 

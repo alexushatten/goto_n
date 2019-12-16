@@ -5,6 +5,7 @@ import rospy
 import yaml
 
 from std_msgs.msg import Int32MultiArray, Float32MultiArray, Bool
+from duckietown_msgs.msg import BoolStamped
 from duckietown import DTROS
 from visualization_msgs.msg import MarkerArray
 from duckietown_utils import load_map
@@ -42,6 +43,7 @@ class GoToNNode(DTROS):
         
         #Set up message process
         self.message_recieved = False
+        self.message_sent = False
 
         #Initialize termination positions  [Row, Column, Direction]
         self.all_termination_positions = rospy.get_param('~termination_positions_list')
@@ -49,16 +51,19 @@ class GoToNNode(DTROS):
         self.all_termination_positions_array = np.array(self.all_termination_positions)
         self.termination_array = np.array(self.termination)
         self.termination_match_array=np.concatenate((self.termination_array,self.all_termination_positions_array),axis=1)
-        #### SOMETHING IFFY
 
         # Start Publisher for each duckiebot
         self.movement_cmd_pub=[]
+        self.arrival_msg_sub=[]
         self.termination_commands = rospy.Publisher('/goto_n/termination_commands', Float32MultiArray, queue_size=10)
 
         # Initialize duckiebots 
         self.autobot_list = rospy.get_param('~duckiebots_list')
+        self.arrival_msg_list = []
         for autobot in self.autobot_list:
             self.movement_cmd_pub.append(rospy.Publisher('/autobot{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
+            self.arrival_msg_sub.append(rospy.Subscriber('/autobot{}/arrival_msg'.format(autobot), BoolStamped, self.arrival_callback))
+            
 
         #Ensure that the planner is correctly set up
         self.proper_initialization()
@@ -131,10 +136,25 @@ class GoToNNode(DTROS):
 
         return termination_tile_positions
 
+    def arrival_callback(self, arrival_msg):
+        self.arrival_msg_list.append(arrival_msg.data)
+        all_robots_in_position = False
+        if len(self.arrival_msg_list) == len(self.autobot_list):
+            for message in self.arrival_msg_list:
+                print(message)
+                if message == False:
+                    self.message_recieved = False
+                    print("Replanning for robots")
+                    self.arrival_msg_list = []
+                    all_robots_in_position = True
+                    return
+            if all_robots_in_position:
+                print("all robots back in position")
+
     def callback(self, markerarray):
         marker = markerarray.markers
         all_bot_positions = []
-        termination_publish_list = []
+
         if self.message_recieved == False:
             #check if it finds the duckiebots and pose
             all_bot_positions, bot_ids = self.extract_autobot_data(marker)
@@ -163,11 +183,13 @@ class GoToNNode(DTROS):
                 pum_msg = Int32MultiArray(data=message)
                 self.movement_cmd_pub[i].publish(pum_msg)
 
-                term_msg = Float32MultiArray()
-                rospy.sleep(1)
-                term_msg = Float32MultiArray(data=termination_message)
-                self.termination_commands.publish(term_msg)
-                print('Sent out termination message')
+                if self.message_sent == False:
+                    term_msg = Float32MultiArray()
+                    rospy.sleep(1)
+                    term_msg = Float32MultiArray(data=termination_message)
+                    self.termination_commands.publish(term_msg)
+                
+            self.message_sent = True
 
 if __name__ == '__main__':
     # Initialize the node
