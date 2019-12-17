@@ -12,10 +12,10 @@ def transition_function(matrix_shape):
     that can be reached from the current node.
 
     Args:
-        matrix_shape (Tuple): Size of the encoded matrix
+        matrix_shape (:obj:'Tuple'): Size of the encoded matrix
 
     Returns:
-        transition_matrix (Matrix): A populated transition matrix that defines the set of possible transitions
+        transition_matrix (:obj:'Matrix'): A populated transition matrix that defines the set of possible transitions
         for each tile type (type of node)
     
     Additional
@@ -48,14 +48,14 @@ def go_matrix(matrix_shape, node_matrix, transition_matrix, direction):
     set of geometric moves (N/E/S/W) from each location on the map. 
 
     Args:
-        matrix_shape (Tuple): Size of the encoded matrix
-        node_matrix (Matrix): Matrix that has the tile type encoded into it
-        transition_matrix (Matrix): Matrix that defines all the possible tiles that can be reached
+        matrix_shape (:obj:'Tuple'): Size of the encoded matrix
+        node_matrix (:obj:'Matrix'): Matrix that has the tile type encoded into it
+        transition_matrix (:obj:'Matrix'): Matrix that defines all the possible tiles that can be reached
             for each tile type
-        directon (Int): Direction that the duckiebot is currently facing
+        directon (:obj:'Int'): Direction that the duckiebot is currently facing
 
     Returns:
-        movement_matrix (Matrix): A populated movement_matrix that defines all the moves a duckiebot
+        movement_matrix (:obj:'Matrix'): A populated movement_matrix that defines all the moves a duckiebot
             can undertake if it in a certain geographical location. 
     
     Additional

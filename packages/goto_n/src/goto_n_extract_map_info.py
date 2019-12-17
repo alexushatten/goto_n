@@ -16,13 +16,13 @@ def extract_tile_matrix(map_data):
     tile type, matrix sixe and tile size from the given map yaml file.
 
     Args:
-        map_data (matrix): The map_data matrix is the matrix created when the load_map function from
+        map_data (:obj:'Matrix'): The map_data matrix is the matrix created when the load_map function from
         duckietown-utils is used to read in the map yaml file
 
     Returns:
-        The tile_matrix (matrix): A matrix consisting of the sequential tile types for the map (in strings)
-        Tile_matrix.shape (tuple): The size of the inputted map
-        tile_size (Float): The size of the tiles used in the map
+        The tile_matrix (:obj:'Matrix'): A matrix consisting of the sequential tile types for the map (in strings)
+        Tile_matrix.shape (:obj:'Tuple'): The size of the inputted map
+        tile_size (:obj:'Float'): The size of the tiles used in the map
     """
 
     tile_matrix = []
@@ -46,11 +46,11 @@ def encode_map_structure(tile_matrix, matrix_shape):
     I.e. a position of [2,2] is the second tile from the left and top.  
 
     Args:
-        tile_matrix (matrix): The matrix containing the names of the tiles found in the Robotarium map
-        matrix_shape (tuple): The shape of the above matrix
+        tile_matrix (:obj:'Matrix'): The matrix containing the names of the tiles found in the Robotarium map
+        matrix_shape (:obj:'Tuple'): The shape of the above matrix
 
     Returns:
-       Node_matrix (matrix): A matrix, the same size as the tiles on the map, that represents the 
+       Node_matrix (:obj:'Int32MultiArray'): A matrix, the same size as the tiles on the map, that represents the 
        specific tiles with integers 
     """
 
@@ -101,11 +101,11 @@ def extend_matrix(node_matrix, matrix_shape):
     matrix. 
 
     Args:
-        node_matrix (Matrix): The matrix containing the integers of the tiles found in the Robotarium map
-        matrix_shape (Tuple): The shape of the above matrix
+        node_matrix (:obj:'Matrix'): The matrix containing the integers of the tiles found in the Robotarium map
+        matrix_shape (:obj:'Tuple'): The shape of the above matrix
 
     Returns:
-       Extended_matrix (Matrix): A matrix that contains inegers in the respective places of the map that
+       Extended_matrix (:obj:'Int32MultiArray'): A matrix that contains inegers in the respective places of the map that
        indicate the set of possible actions for the robot. 
     """
 
