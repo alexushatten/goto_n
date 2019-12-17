@@ -175,7 +175,9 @@ def find_current_tile(pose_x, pose_y, orientation, matrix_shape, tile_size, node
     #tiles and localized on the wrong tile. 
 
     if current_tile_type < 5:
-        if orientation == 0 and current_tile_type != 1:
+        if current_tile_type == 0 and western_tile_type == 0 and eastern_tile_type == 0 and northern_tile_type == 0 and southern_tile_type == 0:
+            print("Out of bounds, call city rescue !")
+        elif orientation == 0 and current_tile_type != 1:
             if western_tile_type == 1:
                 tile_column=previous_column
             elif eastern_tile_type == 1:

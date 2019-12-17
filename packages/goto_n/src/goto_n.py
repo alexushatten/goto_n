@@ -65,9 +65,14 @@ class GoToNNode(DTROS):
         self.autobot_list = rospy.get_param('~duckiebots_list')
         self.arrival_msg_list = []
         for autobot in self.autobot_list:
-            self.movement_cmd_pub.append(rospy.Publisher('/autobot{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
-            self.arrival_msg_sub.append(rospy.Subscriber('/autobot{}/arrival_msg'.format(autobot), BoolStamped, self.arrival_callback))
-            self.plan_viz_pub.append(rospy.Publisher('/autobot{}/plan_visualization'.format(autobot), Path, queue_size=10))
+            if autobot < 10:
+                self.movement_cmd_pub.append(rospy.Publisher('/autobot0{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
+                self.arrival_msg_sub.append(rospy.Subscriber('/autobot0{}/arrival_msg'.format(autobot), BoolStamped, self.arrival_callback))
+                self.plan_viz_pub.append(rospy.Publisher('/autobot0{}/plan_visualization'.format(autobot), Path, queue_size=10))
+            else:
+                self.movement_cmd_pub.append(rospy.Publisher('/autobot{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
+                self.arrival_msg_sub.append(rospy.Subscriber('/autobot{}/arrival_msg'.format(autobot), BoolStamped, self.arrival_callback))
+                self.plan_viz_pub.append(rospy.Publisher('/autobot{}/plan_visualization'.format(autobot), Path, queue_size=10))
 
         #Ensure that the planner is correctly set up
         self.proper_initialization()
@@ -122,7 +127,8 @@ class GoToNNode(DTROS):
                     all_bot_positions.append([duckiebot_id, duckiebot_row, duckiebot_column, duckie_compass_notation])
                     bot_ids.append(duckiebot_id)
                     self.message_recieved = True
-        
+                                    if bots.id == 1:
+
         return all_bot_positions, bot_ids
 
     def extract_termination_tile(self):
@@ -181,7 +187,7 @@ class GoToNNode(DTROS):
                 bot_indx= duckiebot_id.index(self.autobot_list[i])
                 print(bot_indx)
                 duckiebot = self.autobot_list[bot_indx]
-                duckiebot_float = float(duckiebot)
+                duckiebot_float = float(duckiebot_id[bot_indx])
                 message = way_points[bot_indx]
                 duckiebot_coordinates =  global_coordinates[bot_indx]
                 termination = termination_tiles[bot_indx]

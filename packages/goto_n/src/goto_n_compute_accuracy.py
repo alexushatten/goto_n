@@ -50,7 +50,10 @@ class GoToNAccuracy(DTROS):
         
         #create publisher for all duckiebots localized
         for autobot in self.autobot_list:
-            self.command_publisher.append(rospy.Publisher('/autobot{}/positional_diff'.format(autobot), Float32MultiArray, queue_size=10))
+            if autobot < 10:
+                self.command_publisher.append(rospy.Publisher('/autobot0{}/positional_diff'.format(autobot), Float32MultiArray, queue_size=10))
+            else:
+                self.command_publisher.append(rospy.Publisher('/autobot{}/positional_diff'.format(autobot), Float32MultiArray, queue_size=10))
 
         print("Accuracy node initalized")
 

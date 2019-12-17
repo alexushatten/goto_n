@@ -54,6 +54,55 @@ def planner(bot_positions, termination_positions, termination_match_array, all_m
         total_moves_per_bot.append(total_tiles_list[minimum_index])
         total_moves = sum(total_moves_per_bot)
 
+    if total_moves >= 2*matrix_shape[0]*2*matrix_shape[1]:
+        smallest_bot_index = total_moves_per_bot.index(min(total_moves_per_bot))
+        skip_termination = []
+        changing_bot_positions = bot_positions
+        bot_messages = []
+        way_points = []
+        duckiebot_id = []
+        total_moves = 0
+        total_moves_per_bot = []
+        termination_tiles = []
+        picked_global_coordinate = []
+        i = 0
+        for current_bot in bot_positions:
+            different_movement_options = []
+            total_tiles_list = []
+            list_of_coordinates = []
+            botid= bot_positions[smallest_bot_index]
+            for termination_point in termination_positions:
+                if termination_point in skip_termination:
+                    total_tiles_list.append(1000)
+                    different_movement_options.append ([1000] + [1000] + [termination_point])
+                    list_of_coordinates.append(1)
+                    continue
+                else:
+                    cost_mat = cost_matrix(matrix_shape, all_movements_matrix, termination_point, changing_bot_positions, current_bot)
+                    optimal_movements , number_of_movements = value_iteration(matrix_shape, all_movements_matrix, cost_mat)
+                    total_tiles_to_move, movement_commands, global_coordinates = find_robot_commands(current_bot, optimal_movements, number_of_movements, matrix_shape, node_matrix, tile_size)
+                    different_movement_options.append ([total_tiles_to_move] + [movement_commands] + [termination_point])
+                    total_tiles_list.append(total_tiles_to_move)
+                    list_of_coordinates.append(global_coordinates)
+            new_list=list(total_tiles_list)
+            new_list.sort()
+
+            if current_bot[0]==botid[0]:
+                minimum_index = total_tiles_list.index(new_list[1])
+            else:
+                minimum_index = total_tiles_list.index(min(total_tiles_list))
+            best_choice = different_movement_options[minimum_index]
+            picked_global_coordinate.append(list_of_coordinates[minimum_index])   
+            exact_termination = replace_termination(best_choice[2], termination_positions, termination_match_array)
+            message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [exact_termination]        
+            bot_messages.append(message_to_robot)
+            duckiebot_id.append(current_bot[0])
+            way_points.append(best_choice[1])
+            termination_tiles.append(exact_termination)
+            total_moves_per_bot.append(total_tiles_list[minimum_index])
+            total_moves = sum(total_moves_per_bot)
+            i += 1
+
     return bot_messages, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles, picked_global_coordinate
 
 def find_robot_commands(bot_position_and_orientation, optimal_movements, number_of_movements, matrix_shape, node_matrix, tile_size):
