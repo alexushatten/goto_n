@@ -18,12 +18,12 @@ class GoToNAccuracy(DTROS):
         GotoNAccuracy(self)
 
     Subscriber:
-        ~/cslam_markers (:obj:`MarkerArray`): The position/orientation infor from the localisation system
-        ~/goto_n/termination_commands (:obj:'Float32MultiArray'): This subsciber awaits the 
+        /cslam_markers (:obj:`MarkerArray`): The position/orientation infor from the localisation system
+        /goto_n/termination_commands (:obj:'Float32MultiArray'): This subsciber awaits the 
             exact termination location (in global coordinates) from the global planner/server
 
     Publisher:
-        ~autobot{}/positional_diff (:obj:`Float32MultiArray`): The
+        autobot{}/positional_diff (:obj:`Float32MultiArray`): The
             positional difference between the current duckiebot location and the 
             desired termination position (in global coordinates). This is published to
             a topic with the respective autobotID in the name

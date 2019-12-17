@@ -20,6 +20,31 @@ from goto_n_planner import *
 
 
 class GoToNNode(DTROS):
+    """
+    GoToNNode
+
+    This node implements the path planning on the server side. It is the global path planner for
+    all the duckiebots running the Goto_N_Duckiebot node. 
+
+    Args:
+        GotoNNode(self)
+
+    Subscriber:
+        /cslam_markers (:obj:'MarkerArray'): Subscribes to the position and orientation from the online 
+            localization. 
+
+    Publisher:
+        /goto_n/termination_commands (:obj:`Float32MultiArray`): The global x/y positions of the termination
+            state that the given duckiebot is driving towards
+        /autobot{}/movement_commands (:obj'Int32MultiArray'): These are the intersection movement commmands
+            that are sent to the respective duckiebots
+        /autobot0{}/arrival_msg (:obj:'duckietown_msgs.msg.BoolStamped'): Boolean that activates the final 
+            accuracy node once the last command has been completed
+        /autobot0{}/plan_visualization (:obj:'nav_msgs.msg.Path'): The path coordinates sent out to the RVIZ
+            subscriber. 
+        /'+watchtower+'/'+"requestImage" (:obj:'Bool'): A boolean that requests images from the watchtower to 
+            localize the duckiebots. 
+    """
 
     def __init__(self, node_name):
 
@@ -33,8 +58,8 @@ class GoToNNode(DTROS):
         self.map_matrix, self.matrix_shape, self.tile_size = extract_tile_matrix(self.map_data)
         small_node_matrix = encode_map_structure(self.map_matrix, self.matrix_shape)
         self.node_matrix = extend_matrix(small_node_matrix, self.matrix_shape)
-        print(self.matrix_shape)
-        # Create movement_matrixes
+
+        # Create movement_matricies
         self.transition_matrix=transition_function(self.matrix_shape)
         self.go_north=go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"north")
         self.go_east= go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"east")
@@ -59,7 +84,6 @@ class GoToNNode(DTROS):
         self.arrival_msg_sub=[]
         self.plan_viz_pub=[]
         self.termination_commands = rospy.Publisher('/goto_n/termination_commands', Float32MultiArray, queue_size=10)
-
 
         # Initialize duckiebots 
         self.autobot_list = rospy.get_param('~duckiebots_list')
@@ -92,6 +116,11 @@ class GoToNNode(DTROS):
         self.request_watchtower_image()
 
     def proper_initialization(self):
+        """
+        This  function determines if the initialization parameters are met. I.e. if there 
+        are an equal number of duckiebots and termination states present.
+        """
+
         #checks if the initialization parameters are met
         if len(self.autobot_list) == len(self.all_termination_positions):
             print('\nThere are an equal number of autobots and termination states. Starting Goto_n Node! \n')
@@ -101,6 +130,10 @@ class GoToNNode(DTROS):
             print('\nPlease enter another Termination State \n')    
         
     def request_watchtower_image(self):
+        """
+        This function requests images from the watchtower in order to perform the localization of the duckiebots 
+        """
+
         #requests an image from watchtowers in town
         msg_sended = Bool()
         rospy.sleep(1)
@@ -109,12 +142,30 @@ class GoToNNode(DTROS):
             self.image_request[i].publish(msg_sended)
 
     def extract_autobot_data(self, marker):
+        """
+        This function takes the Marker Array from the localization system and extracts the relevant
+        information that will then be used later in path planning. 
+
+        Args:
+            Marker (:obj:'Visualization_msgs.msg.MarkerArray'): The marker array contains the position
+                and orientation information from the online localization.
+
+        Returns:
+            all_bot_positions (:obj:'Int32MultiArray'): Creates an array with all bot positions and orienations
+                in the node notation
+            bot_ids (:obj:'Int32Array'): Array containing all the duckiebot ids
+        """
+
+        #Initialize the necessary arrays
         all_bot_positions = []
         bot_ids = []
+
         for bots in marker: 
             if bots.ns == "duckiebots":
+
                 #Set duckiebots position and orientation
                 duckiebot_id = bots.id
+
                 if duckiebot_id in self.autobot_list:
                     duckiebot_x = bots.pose.position.x
                     duckiebot_y = bots.pose.position.y
@@ -131,6 +182,15 @@ class GoToNNode(DTROS):
         return all_bot_positions, bot_ids
 
     def extract_termination_tile(self):
+        """
+        This function takes the global positions of the termination states and converts them into
+        node notation and orientation to be used in the path planning.
+
+        Returns:
+            termination_tile_positions (:obj:'Int32MultiArray'): An array that contains all the termination 
+                position in tile notation. 
+        """
+
         termination_positions = self.all_termination_positions
         termination_tile_positions = []        
 
@@ -146,6 +206,16 @@ class GoToNNode(DTROS):
         return termination_tile_positions
 
     def arrival_callback(self, arrival_msg):
+        """
+        This function lets the server know if it has arrived. If one of the duckiebots returns this 
+        as false, this function replans the path for the given duckiebot in order to ensure all duckiebots
+        arrive at the desired location. 
+
+        Args:
+            arrival_msg (:obj:'duckietown_msgs.msg.BoolStamped'): The marker array contains the position
+            and orientation information of all the duckiebots on the map. 
+        """
+
         self.arrival_msg_list.append(arrival_msg.data)
         all_robots_in_position = False
         if len(self.arrival_msg_list) == len(self.autobot_list):
@@ -160,29 +230,52 @@ class GoToNNode(DTROS):
                 print("all robots back in position")
 
     def callback(self, markerarray):
+        """
+        The callback function receives an input from the localization (one time input). It then
+        performs the Goto-N functionality by planning the paths for all duckiebot and publishing the 
+        movement commands to the respective duckiebots. 
+        Args:
+            Markerarray (:obj:'Visualization_msgs.msg.MarkerArray'): The marker array contains the position
+                and orientation information of the duckiebots from the online localization.
+
+        Publisher:
+        /goto_n/termination_commands (:obj:`Float32MultiArray`): The global x/y positions of the termination
+            state that the given duckiebot is driving towards
+        /autobot{}/movement_commands (:obj'Int32MultiArray'): These are the intersection movement commmands
+            that are sent to the respective duckiebots
+        /autobot0{}/plan_visualization (:obj:'nav_msgs.msg.Path'): The path coordinates sent out to the RVIZ
+            subscriber.
+        """
+
+        #initialize all necessary arrays
         marker = markerarray.markers
         all_bot_positions = []
 
         if self.message_recieved == False:
             #check if it finds the duckiebots and pose
+
             all_bot_positions, bot_ids = self.extract_autobot_data(marker)
             print('Received Message from the Online Localization. Starting Planning Algorithm: \n')
 
+            #determine the optimal order and run the planning algorithm
             best_start_config = order_optimization(all_bot_positions, bot_ids, self.termination, \
             self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix, self.tile_size)
             plan,total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles, global_coordinates = planner(best_start_config, self.termination, \
             self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix, self.tile_size)
 
-
             print("Duckiebot id and Termination tiles")
             print(duckiebot_id)
             print(termination_tiles)
+
             #this is the code for multiple autobot
             for i in range(0, len(bot_ids)):
+
+                #determine if all autobots have been located
                 if len(bot_ids) !=len(self.autobot_list):
                     print("Could not locate all duckiebots in the list")
                     return
 
+                #assign the waypoint commands to the right duckiebot
                 bot_indx= duckiebot_id.index(self.autobot_list[i])
                 print(bot_indx)
                 duckiebot = self.autobot_list[bot_indx]
@@ -196,6 +289,7 @@ class GoToNNode(DTROS):
                 print('The waypoint commands sent out to the duckiebot {} are {}. \n'.format(duckiebot_id[bot_indx], message))
                 print('Waypoint Commands sent out to the respective Duckiebots! \n')
                 
+                #Publish the waypoint commands the right duckiebot. 
                 rospy.sleep(1)
                 pum_msg = Int32MultiArray(data=message)
                 self.movement_cmd_pub[i].publish(pum_msg)
@@ -206,6 +300,7 @@ class GoToNNode(DTROS):
                     term_msg = Float32MultiArray(data=termination_message)
                     self.termination_commands.publish(term_msg)
                 
+                #Publish the visualization data to RVIZ
                 path = Path()
                 path.header.frame_id = "map"
                 for coordinate in duckiebot_coordinates:
@@ -219,7 +314,6 @@ class GoToNNode(DTROS):
 
                     path.poses.append(cur_pose)
                 self.plan_viz_pub[i].publish(path)
-
                 
             self.message_sent = True
 
