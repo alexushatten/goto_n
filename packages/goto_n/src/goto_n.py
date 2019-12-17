@@ -127,7 +127,6 @@ class GoToNNode(DTROS):
                     all_bot_positions.append([duckiebot_id, duckiebot_row, duckiebot_column, duckie_compass_notation])
                     bot_ids.append(duckiebot_id)
                     self.message_recieved = True
-                                    if bots.id == 1:
 
         return all_bot_positions, bot_ids
 
