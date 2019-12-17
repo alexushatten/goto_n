@@ -12,7 +12,7 @@ def replace_termination(termination_point, termination, termination_match_array)
             exact_termination = termination_match_array[i][3:6].tolist()
     return exact_termination
 
-def planner(bot_positions, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix):
+def planner(bot_positions, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix, tile_size):
     skip_termination = []
     changing_bot_positions = bot_positions
     bot_messages = []
@@ -21,44 +21,42 @@ def planner(bot_positions, termination_positions, termination_match_array, all_m
     total_moves = 0
     total_moves_per_bot = []
     termination_tiles = []
-
+    picked_global_coordinate = []
     i = 0
     for current_bot in bot_positions:
         different_movement_options = []
         total_tiles_list = []
+        list_of_coordinates = []
         #Which termination_point it will end op on
         for termination_point in termination_positions:
             if termination_point in skip_termination:
                 total_tiles_list.append(1000)
                 different_movement_options.append ([1000] + [1000] + [termination_point])
+                list_of_coordinates.append(1)
                 continue
             else:
                 cost_mat = cost_matrix(matrix_shape, all_movements_matrix, termination_point, changing_bot_positions, current_bot)
                 optimal_movements , number_of_movements = value_iteration(matrix_shape, all_movements_matrix, cost_mat)
-                total_tiles_to_move, movememt_commands = find_robot_commands(current_bot, optimal_movements, number_of_movements, matrix_shape, node_matrix)
-                different_movement_options.append ([total_tiles_to_move] + [movememt_commands] + [termination_point])
+                total_tiles_to_move, movement_commands, global_coordinates = find_robot_commands(current_bot, optimal_movements, number_of_movements, matrix_shape, node_matrix, tile_size)
+                different_movement_options.append ([total_tiles_to_move] + [movement_commands] + [termination_point])
                 total_tiles_list.append(total_tiles_to_move)
+                list_of_coordinates.append(global_coordinates)
 
         minimum_index = total_tiles_list.index(min(total_tiles_list))
         best_choice = different_movement_options[minimum_index]
-        changing_bot_positions[i] = [current_bot[0]] + different_movement_options[minimum_index][2]
-        
+        picked_global_coordinate.append(list_of_coordinates[minimum_index])   
         exact_termination = replace_termination(best_choice[2], termination_positions, termination_match_array)
-
-        
         message_to_robot = [current_bot[0]] + [best_choice[1]] + [best_choice[0]] + [exact_termination]
-
-        skip_termination.append(termination_positions[minimum_index])
         bot_messages.append(message_to_robot)
         duckiebot_id.append(current_bot[0])
         way_points.append(best_choice[1])
         termination_tiles.append(exact_termination)
         total_moves_per_bot.append(total_tiles_list[minimum_index])
         total_moves = sum(total_moves_per_bot)
-        i += 1
-    return bot_messages, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles
 
-def find_robot_commands(bot_position_and_orientation, optimal_movements, number_of_movements, matrix_shape, node_matrix):
+    return bot_messages, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles, picked_global_coordinate
+
+def find_robot_commands(bot_position_and_orientation, optimal_movements, number_of_movements, matrix_shape, node_matrix, tile_size):
     name = bot_position_and_orientation[0]
     row = bot_position_and_orientation[1]
     column = bot_position_and_orientation[2]
@@ -68,8 +66,10 @@ def find_robot_commands(bot_position_and_orientation, optimal_movements, number_
 
     cell = row*2*matrix_shape[1] + column
     movement_commands = []
-    current_orientation = orientation
-    previous_orientation = orientation
+    global_coordinates = []
+    x_coordinate, y_coordinate = node_to_globalcoordinates(row, column, tile_size, matrix_shape)
+    global_coordinates.append([x_coordinate, y_coordinate])
+
     total_number_of_moments = int(number_of_movements[cell])
     for i in range (0, total_number_of_moments):
         
@@ -106,26 +106,33 @@ def find_robot_commands(bot_position_and_orientation, optimal_movements, number_
             elif node_matrix[row][column] in (6,12,19):
                 movement_commands.append(2) #RIGHT
 
-        previous_orientation = optimal_movements[cell]
         cell = cell + transition_point
         row = int(math.floor(cell/(2*matrix_shape[1])))
         column = int(cell - row*2*matrix_shape[1])
+        x_coordinate, y_coordinate = node_to_globalcoordinates(row, column, tile_size, matrix_shape)
+        global_coordinates.append([x_coordinate, y_coordinate])
     movement_commands.append(4) #STOP
-    return total_number_of_moments, movement_commands
+    return total_number_of_moments, movement_commands, global_coordinates
 
-def order_optimization(all_bot_positions, duckiebot_id, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix):
+def node_to_globalcoordinates (row, column, tile_size, matrix_shape):
+    y = matrix_shape[0]*tile_size-(tile_size/2)*row-(tile_size/4)
+    x = (tile_size/2)*column+(tile_size/4)
+    return x, y
+
+def order_optimization(all_bot_positions, duckiebot_id, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix, tile_size):
 
     num_of_bots = len(duckiebot_id)
     available_bot_config = all_bot_positions
     all_plans = []
     total_movements = []
     way_point = []
+    all_termination_tiles =[]
     
     combinations = list(permutations(available_bot_config, num_of_bots))
     
     for combination in combinations:
         array = np.asarray(combination)
-        plan, _, way_points, _, total_moves, _  = planner(array, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix)
+        plan, _, way_points, _, total_moves, _, _  = planner(array, termination_positions, termination_match_array, all_movements_matrix, matrix_shape, node_matrix, tile_size)
         total_movements.append(total_moves)
         all_plans.append(plan)
         way_point.append(way_points)

@@ -5,6 +5,8 @@ import rospy
 import yaml
 
 from std_msgs.msg import Int32MultiArray, Float32MultiArray, Bool
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
 from duckietown_msgs.msg import BoolStamped
 from duckietown import DTROS
 from visualization_msgs.msg import MarkerArray
@@ -31,7 +33,7 @@ class GoToNNode(DTROS):
         self.map_matrix, self.matrix_shape, self.tile_size = extract_tile_matrix(self.map_data)
         small_node_matrix = encode_map_structure(self.map_matrix, self.matrix_shape)
         self.node_matrix = extend_matrix(small_node_matrix, self.matrix_shape)
-
+        print(self.matrix_shape)
         # Create movement_matrixes
         self.transition_matrix=transition_function(self.matrix_shape)
         self.go_north=go_matrix(self.matrix_shape, self.node_matrix, self.transition_matrix,"north")
@@ -55,7 +57,9 @@ class GoToNNode(DTROS):
         # Start Publisher for each duckiebot
         self.movement_cmd_pub=[]
         self.arrival_msg_sub=[]
+        self.plan_viz_pub=[]
         self.termination_commands = rospy.Publisher('/goto_n/termination_commands', Float32MultiArray, queue_size=10)
+
 
         # Initialize duckiebots 
         self.autobot_list = rospy.get_param('~duckiebots_list')
@@ -63,7 +67,7 @@ class GoToNNode(DTROS):
         for autobot in self.autobot_list:
             self.movement_cmd_pub.append(rospy.Publisher('/autobot{}/movement_commands'.format(autobot), Int32MultiArray, queue_size=10))
             self.arrival_msg_sub.append(rospy.Subscriber('/autobot{}/arrival_msg'.format(autobot), BoolStamped, self.arrival_callback))
-            
+            self.plan_viz_pub.append(rospy.Publisher('/autobot{}/plan_visualization'.format(autobot), Path, queue_size=10))
 
         #Ensure that the planner is correctly set up
         self.proper_initialization()
@@ -141,7 +145,6 @@ class GoToNNode(DTROS):
         all_robots_in_position = False
         if len(self.arrival_msg_list) == len(self.autobot_list):
             for message in self.arrival_msg_list:
-                print(message)
                 if message == False:
                     self.message_recieved = False
                     print("Replanning for robots")
@@ -161,22 +164,31 @@ class GoToNNode(DTROS):
             print('Received Message from the Online Localization. Starting Planning Algorithm: \n')
 
             best_start_config = order_optimization(all_bot_positions, bot_ids, self.termination, \
-            self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix)
-            plan, total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles = planner(best_start_config, self.termination, \
-            self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix)
+            self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix, self.tile_size)
+            plan,total_moves_per_bot, way_points, duckiebot_id, total_moves, termination_tiles, global_coordinates = planner(best_start_config, self.termination, \
+            self.termination_match_array, self.all_movements_matrix, self.matrix_shape, self.node_matrix, self.tile_size)
 
+
+            print("Duckiebot id and Termination tiles")
+            print(duckiebot_id)
+            print(termination_tiles)
             #this is the code for multiple autobot
             for i in range(0, len(bot_ids)):
+                if len(bot_ids) !=len(self.autobot_list):
+                    print("Could not locate all duckiebots in the list")
+                    return
 
-                bot_indx=duckiebot_id.index(bot_ids[i])
-                duckiebot = duckiebot_id[bot_indx]
-                duckiebot_float = duckiebot.astype(float)
+                bot_indx= duckiebot_id.index(self.autobot_list[i])
+                print(bot_indx)
+                duckiebot = self.autobot_list[bot_indx]
+                duckiebot_float = float(duckiebot)
                 message = way_points[bot_indx]
+                duckiebot_coordinates =  global_coordinates[bot_indx]
                 termination = termination_tiles[bot_indx]
                 termination_message = [duckiebot_float] + termination 
                 pum_msg = Int32MultiArray()   
                 print('The starting Positions of all bots are: {} \n'.format(all_bot_positions))
-                print('The waypoint commands sent out to the duckiebot {} are {}. \n'.format(duckiebot, message))
+                print('The waypoint commands sent out to the duckiebot {} are {}. \n'.format(duckiebot_id[bot_indx], message))
                 print('Waypoint Commands sent out to the respective Duckiebots! \n')
                 
                 rospy.sleep(1)
@@ -188,6 +200,21 @@ class GoToNNode(DTROS):
                     rospy.sleep(1)
                     term_msg = Float32MultiArray(data=termination_message)
                     self.termination_commands.publish(term_msg)
+                
+                path = Path()
+                path.header.frame_id = "map"
+                for coordinate in duckiebot_coordinates:
+                    cur_pose = PoseStamped()
+
+                    cur_pose.header.stamp = rospy.Time.now()
+                    cur_pose.pose.position.x= coordinate[0]
+                    cur_pose.pose.position.y = coordinate[1]
+                    cur_pose.pose.position.z = 0.1
+                    cur_pose.pose.orientation.w = 1
+
+                    path.poses.append(cur_pose)
+                self.plan_viz_pub[i].publish(path)
+
                 
             self.message_sent = True
 
