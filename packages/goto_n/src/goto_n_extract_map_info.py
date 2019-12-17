@@ -1,15 +1,56 @@
 #!/usr/bin/env python
 import numpy as np
 
+'''
+The functions in this file are used to extract the relevant map information from any given 
+yaml file (as long as it is in the format of the other map yaml files in duckietown world)
+in order to use it in our dynnamic programming planning algorithm
+'''
+
 def extract_tile_matrix(map_data):
+    """
+    Extracts the tile specific information for the map that the goto-n should be performed on.
+
+    The input of the funciton is the map_data matrix. As can be seen in the goto_n.py file, the 
+    map_data matrix uses the load_map function (from duckietown_utils) in order to extract the specific 
+    tile type, matrix sixe and tile size from the given map yaml file.
+
+    Args:
+        map_data (matrix): The map_data matrix is the matrix created when the load_map function from
+        duckietown-utils is used to read in the map yaml file
+
+    Returns:
+        The tile_matrix: A matrix consisting of the sequential tile types for the map (in strings)
+        Tile_matrix.shape: The size of the inputted map
+        tile_size: The size of the tiles used in the map
+    """
+
     tile_matrix = []
     for tile in map_data["tiles"]:
         tile_matrix.append(tile)
     tile_matrix = np.array(tile_matrix)
+    
     return tile_matrix, tile_matrix.shape, map_data["tile_size"]
 
 
 def encode_map_structure(tile_matrix, matrix_shape):
+    """
+    Encodes a numerical value that represents the tile type found in the map
+
+    Our planning algorithm makes decisions (has allowable movements) depending on the 
+    tile type that the duckiebot is currently on. This function takes the tile_matrix (matrix 
+    composed of the names of the respective tiles found in the map) and replaces the string with
+    an integer value representing the tile type. 
+
+    Args:
+        tile_matrix: The matrix containing the names of the tiles found in the Robotarium map
+        matrix_shape: The shape of the above matrix
+
+    Returns:
+       Node_matrix: A matrix, the same size as the tiles on the map, that represents the 
+       specific tiles with integers 
+    """
+
     row = tile_matrix.shape[0]
     column = tile_matrix.shape[1]
 
@@ -46,6 +87,25 @@ def encode_map_structure(tile_matrix, matrix_shape):
 
 
 def extend_matrix(node_matrix, matrix_shape):
+    """
+    Extends the node_matrix created above to increase the accuracy/resolution of the planner
+
+    This function takes the node_matrix, the matrix that encodes specific actions based on the current
+    tile type, and replaces it with a more granular representation of the matrix. As a result, 
+    each tile has four distinct states in which the duckiebot can act differently instead of just one. 
+
+    In the case of the K31 lab, this function is used to turn the (6,6) matrix into a more granular (12,12)
+    matrix. 
+
+    Args:
+        node_matrix: The matrix containing the integers of the tiles found in the Robotarium map
+        matrix_shape: The shape of the above matrix
+
+    Returns:
+       Extended_matrix: A matrix that contains inegers in the respective places of the map that
+       indicate the set of possible actions for the robot. 
+    """
+
     extended_matrix=np.zeros((2*matrix_shape[0],2*matrix_shape[1]))
     for i in range(0,matrix_shape[0]):
         for j in range(0, matrix_shape[1]):
