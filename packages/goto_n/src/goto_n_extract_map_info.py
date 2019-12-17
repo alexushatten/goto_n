@@ -20,9 +20,9 @@ def extract_tile_matrix(map_data):
         duckietown-utils is used to read in the map yaml file
 
     Returns:
-        The tile_matrix: A matrix consisting of the sequential tile types for the map (in strings)
-        Tile_matrix.shape: The size of the inputted map
-        tile_size: The size of the tiles used in the map
+        The tile_matrix (matrix): A matrix consisting of the sequential tile types for the map (in strings)
+        Tile_matrix.shape (tuple): The size of the inputted map
+        tile_size (Float): The size of the tiles used in the map
     """
 
     tile_matrix = []
@@ -35,19 +35,22 @@ def extract_tile_matrix(map_data):
 
 def encode_map_structure(tile_matrix, matrix_shape):
     """
-    Encodes a numerical value that represents the tile type found in the map
+    Encodes a numerical value that represents the tile type found in the map.
 
     Our planning algorithm makes decisions (has allowable movements) depending on the 
     tile type that the duckiebot is currently on. This function takes the tile_matrix (matrix 
     composed of the names of the respective tiles found in the map) and replaces the string with
     an integer value representing the tile type. 
 
+    The origin of the tile matrix, similar to the way it is set-up in the yaml file, is the top-left corner
+    I.e. a position of [2,2] is the second tile from the left and top.  
+
     Args:
-        tile_matrix: The matrix containing the names of the tiles found in the Robotarium map
-        matrix_shape: The shape of the above matrix
+        tile_matrix (matrix): The matrix containing the names of the tiles found in the Robotarium map
+        matrix_shape (tuple): The shape of the above matrix
 
     Returns:
-       Node_matrix: A matrix, the same size as the tiles on the map, that represents the 
+       Node_matrix (matrix): A matrix, the same size as the tiles on the map, that represents the 
        specific tiles with integers 
     """
 
@@ -98,11 +101,11 @@ def extend_matrix(node_matrix, matrix_shape):
     matrix. 
 
     Args:
-        node_matrix: The matrix containing the integers of the tiles found in the Robotarium map
-        matrix_shape: The shape of the above matrix
+        node_matrix (Matrix): The matrix containing the integers of the tiles found in the Robotarium map
+        matrix_shape (Tuple): The shape of the above matrix
 
     Returns:
-       Extended_matrix: A matrix that contains inegers in the respective places of the map that
+       Extended_matrix (Matrix): A matrix that contains inegers in the respective places of the map that
        indicate the set of possible actions for the robot. 
     """
 
